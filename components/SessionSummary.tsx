@@ -327,31 +327,31 @@ export default function SessionSummary({
               </button>
             </div>
 
-            <div className="p-4">
+            <div className="p-3">
               {/* Quick Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                <div className="bg-blue-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-blue-600">
                     {todayMatches.length}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">Matches Played</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Matches Played</div>
                 </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
+                <div className="bg-green-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-green-600">
                     {todayMatches.reduce(
                       (sum, m) => sum + (m.teamAGames || 0) + (m.teamBGames || 0),
                       0
                     )}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">Total Games</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Total Games</div>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-3 text-center">
+                <div className="bg-purple-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-purple-600">
                     {sessionStats.filter((s) => s.matchesPlayed > 0).length}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">Players Active</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Players Active</div>
                 </div>
-                <div className="bg-orange-50 rounded-lg p-3 text-center">
+                <div className="bg-orange-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-orange-600">
                     {Math.round(
                       todayMatches.reduce(
@@ -360,35 +360,35 @@ export default function SessionSummary({
                       ) / todayMatches.length
                     )}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">Avg Games/Match</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Avg Games/Match</div>
                 </div>
               </div>
 
               {/* Movement & Comparison Table */}
-              <div className="mb-4">
-                <h3 className="text-base font-bold text-gray-900 mb-2">
+              <div className="mb-3">
+                <h3 className="text-base font-bold text-gray-900 mb-1.5">
                   Session Impact & Movement
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-left font-semibold text-gray-700 text-xs">
                           Player
                         </th>
-                        <th className="px-2 py-1.5 text-center font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-center font-semibold text-gray-700 text-xs">
                           Session Pts
                         </th>
-                        <th className="px-2 py-1.5 text-center font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-center font-semibold text-gray-700 text-xs">
                           Pts Gained
                         </th>
-                        <th className="px-2 py-1.5 text-center font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-center font-semibold text-gray-700 text-xs">
                           Overall Pts
                         </th>
-                        <th className="px-2 py-1.5 text-center font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-center font-semibold text-gray-700 text-xs">
                           Rank Change
                         </th>
-                        <th className="px-2 py-1.5 text-center font-semibold text-gray-700 text-xs">
+                        <th className="px-1.5 py-1 text-center font-semibold text-gray-700 text-xs">
                           Overall Rank
                         </th>
                       </tr>
@@ -399,21 +399,21 @@ export default function SessionSummary({
                           key={player.playerId}
                           className={player.overallRank === 1 ? "bg-yellow-50" : ""}
                         >
-                          <td className="px-2 py-1.5 font-medium text-gray-900">
+                          <td className="px-1.5 py-1 font-medium text-gray-900">
                             {player.name}
                           </td>
-                          <td className="px-2 py-1.5 text-center font-bold text-blue-600">
+                          <td className="px-1.5 py-1 text-center font-bold text-blue-600">
                             +{player.sessionPoints}
                           </td>
-                          <td className="px-2 py-1.5 text-center">
+                          <td className="px-1.5 py-1 text-center">
                             <span className="text-green-600 font-semibold">
                               +{player.pointsGained}
                             </span>
                           </td>
-                          <td className="px-2 py-1.5 text-center font-bold text-gray-900">
+                          <td className="px-1.5 py-1 text-center font-bold text-gray-900">
                             {player.overallPoints}
                           </td>
-                          <td className="px-2 py-1.5 text-center">
+                          <td className="px-1.5 py-1 text-center">
                             {player.rankChange > 0 && (
                               <span className="text-green-600 font-bold flex items-center justify-center gap-1">
                                 <span>↑{player.rankChange}</span>
@@ -428,7 +428,7 @@ export default function SessionSummary({
                               <span className="text-gray-400">−</span>
                             )}
                           </td>
-                          <td className="px-2 py-1.5 text-center">
+                          <td className="px-1.5 py-1 text-center">
                             <span className="font-bold text-gray-900">
                               #{player.overallRank}
                               {player.overallRank === 1 && " 🏆"}
@@ -442,11 +442,11 @@ export default function SessionSummary({
               </div>
 
               {/* Session Performance Bars */}
-              <div className="mb-4">
-                <h3 className="text-base font-bold text-gray-900 mb-2">
+              <div className="mb-3">
+                <h3 className="text-base font-bold text-gray-900 mb-1.5">
                   Session Performance
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {sessionStats.map((stats) => {
                     const maxPoints = Math.max(...sessionStats.map((s) => s.points));
                     const percentage = maxPoints > 0 ? (stats.points / maxPoints) * 100 : 0;
