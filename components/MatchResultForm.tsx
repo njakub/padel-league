@@ -8,6 +8,10 @@ interface Match {
   teamAGames: number | null;
   teamBGames: number | null;
   winnerTeam: string | null;
+  teamAPlayer1: { name: string };
+  teamAPlayer2: { name: string };
+  teamBPlayer1: { name: string };
+  teamBPlayer2: { name: string };
 }
 
 interface MatchResultFormProps {
@@ -127,6 +131,9 @@ export default function MatchResultForm({
                   >
                     Team A Games
                   </label>
+                  <div className="text-xs text-gray-500 mb-2">
+                    ({match.teamAPlayer1.name} & {match.teamAPlayer2.name})
+                  </div>
                   <input
                     id="teamAGames"
                     type="number"
@@ -147,6 +154,9 @@ export default function MatchResultForm({
                   >
                     Team B Games
                   </label>
+                  <div className="text-xs text-gray-500 mb-2">
+                    ({match.teamBPlayer1.name} & {match.teamBPlayer2.name})
+                  </div>
                   <input
                     id="teamBGames"
                     type="number"
