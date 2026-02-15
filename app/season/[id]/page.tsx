@@ -5,6 +5,7 @@ import { calculateStandings } from "@/lib/scoring";
 import CompleteSeasonButton from "@/components/CompleteSeasonButton";
 import DeleteSeasonButton from "@/components/DeleteSeasonButton";
 import MatchListWithTabs from "@/components/MatchListWithTabs";
+import SessionSummary from "@/components/SessionSummary";
 
 async function getSeason(id: number) {
   return await prisma.season.findUnique({
@@ -166,6 +167,9 @@ export default async function SeasonPage({
           </table>
         </div>
       </div>
+
+      {/* Session Summary - Today's games */}
+      <SessionSummary matches={season.matches} seasonName={season.name} />
 
       {/* Schedule with Tabs */}
       <MatchListWithTabs
