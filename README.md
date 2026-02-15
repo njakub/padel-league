@@ -38,15 +38,17 @@ This ensures complete fairness over the course of a season.
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
-- **Database**: SQLite (development) / PostgreSQL (production-ready via Prisma)
+- **Database**: PostgreSQL (Neon)
 - **ORM**: Prisma
 - **Styling**: Tailwind CSS
 - **Testing**: Vitest
+- **Deployment**: Vercel
 
 ## Prerequisites
 
 - Node.js 18+
 - npm or yarn
+- Neon PostgreSQL database (or other PostgreSQL provider)
 
 ## Setup Instructions
 
@@ -56,21 +58,40 @@ This ensures complete fairness over the course of a season.
 npm install
 ```
 
-### 2. Set Up Database
+### 2. Set Up Environment Variables
 
-Initialize Prisma and create the database:
+Create a `.env` file in the root directory:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your Neon PostgreSQL connection strings:
+
+```env
+# Pooled connection (for Vercel/serverless)
+DATABASE_URL="postgresql://USER:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require"
+
+# Direct connection (for migrations)
+DIRECT_URL="postgresql://USER:PASSWORD@HOST.REGION.aws.neon.tech/DATABASE?sslmode=require"
+```
+
+**Security Note**: Never commit the `.env` file to version control! It's already in `.gitignore`.
+
+### 3. Set Up Database
+
+Run Prisma migrations to create the database schema:
 
 ```bash
 npx prisma migrate dev --name init
 ```
 
 This will:
-
-- Create the SQLite database file
-- Run migrations to set up tables
+- Connect to your Neon PostgreSQL database
+- Create all necessary tables
 - Generate Prisma Client
 
-### 3. Seed Players
+### 4. Seed Players
 
 Populate the database with the 5 players:
 
@@ -80,7 +101,7 @@ npm run db:seed
 
 This creates the fixed roster: Jakub, Joe, Jon, Matt, Charlie
 
-### 4. Run Development Server
+### 5. Run Development Server
 
 ```bash
 npm run dev
@@ -91,12 +112,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Available Scripts
 
 - `npm run dev` - Start development server
-- `npm run build` - Build for production
+- `npm run build` - Build for production (includes Prisma generation and migrations)
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
 - `npm test` - Run tests with Vitest
 - `npm run test:ui` - Run tests with Vitest UI
 - `npm run db:seed` - Seed database with players
+- `npm run db:migrate` - Run Prisma migrations in development
+- `npm run db:push` - Push schema changes without migrations
+- `npm run db:studio` - Open Prisma Studio to view/edit data
 
 ## Project Structure
 
@@ -215,32 +239,108 @@ npm run test:ui
 - `winnerTeam`: "A" or "B" (nullable until played)
 - `playedAt`: Timestamp (nullable until played)
 
-## Production Deployment
+## Production Deployment (Vercel)
 
-To use PostgreSQL instead of SQLite for production:
+### Prerequisites
 
-1. Update `prisma/schema.prisma`:
+1. **Neon PostgreSQL Database** - Sign up at [neon.tech](https://neon.tech)
+2. **Vercel Account** - Sign up at [vercel.com](https://vercel.com)
+3. **GitHub Repository** - Push your code to GitHub
 
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
+### Deployment Steps
 
-2. Set `DATABASE_URL` environment variable to your PostgreSQL connection string
+#### 1. Prepare Your Database
 
-3. Run migrations:
+Get your Neon connection strings from the Neon dashboard:
+- **Pooled connection** (with `-pooler` in the hostname) - use for `DATABASE_URL`
+- **Direct connection** (without `-pooler`) - use for `DIRECT_URL`
+
+Both should include `?sslmode=require` at the end.
+
+#### 2. Deploy to Vercel
+
+**Option A: Via Vercel Dashboard**
+
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your GitHub repository
+3. Configure environment variables:
+   - `DATABASE_URL`: Your Neon pooled connection string
+   - `DIRECT_URL`: Your Neon direct connection string
+4. Click **Deploy**
+
+**Option B: Via Vercel CLI**
 
 ```bash
-npx prisma migrate deploy
+# Install Vercel CLI
+npm i -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel
+
+# Add environment variables
+vercel env add DATABASE_URL
+vercel env add DIRECT_URL
+
+# Deploy to production
+vercel --prod
 ```
 
-4. Seed the database:
+#### 3. Seed Your Production Database
+
+After deployment, run the seed command:
 
 ```bash
-npm run db:seed
+vercel env pull .env.production.local
+DATABASE_URL="your-production-url" npm run db:seed
 ```
+
+Or use Prisma Studio to manually add the 5 players.
+
+### Environment Variables for Vercel
+
+Set these in your Vercel project settings:
+
+| Variable | Value | Environment |
+|----------|-------|-------------|
+| `DATABASE_URL` | `postgresql://USER:PASSWORD@HOST-pooler...` | Production, Preview, Development |
+| `DIRECT_URL` | `postgresql://USER:PASSWORD@HOST...` | Production, Preview, Development |
+
+**Important**: 
+- Use the **pooled connection** (`-pooler` hostname) for `DATABASE_URL` - this is optimized for serverless
+- Use the **direct connection** for `DIRECT_URL` - this is used for migrations during build
+- Both URLs should end with `?sslmode=require`
+
+### Build Configuration
+
+The `build` script in `package.json` automatically handles:
+1. `prisma generate` - Generate Prisma Client
+2. `prisma migrate deploy` - Apply migrations to production
+3. `next build` - Build Next.js application
+
+No additional configuration needed!
+
+### Post-Deployment
+
+1. Visit your Vercel URL
+2. Create your first season
+3. Start tracking matches!
+
+### Troubleshooting
+
+**Build fails with "Cannot find module '@prisma/client'"**
+- Ensure `postinstall` script includes `prisma generate`
+
+**Database connection errors**
+- Verify environment variables are set correctly in Vercel
+- Check that your Neon database allows connections from Vercel IPs (it should by default)
+- Ensure connection strings include `?sslmode=require`
+
+**Migration errors**
+- Use `DIRECT_URL` for migrations, not the pooled connection
+- Ensure `DIRECT_URL` is set in Vercel environment variables
 
 ## Algorithm Details
 

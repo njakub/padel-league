@@ -1,0 +1,7 @@
+{
+  "build": {
+    "env": {
+      "DIRECT_URL": "@direct_url"
+    }
+  }
+}

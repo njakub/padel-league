@@ -1,0 +1,19 @@
+# Test files
+*.test.ts
+*.test.tsx
+**/__tests__/
+
+# Development files
+.env
+.env.local
+.env*.local
+
+# Documentation
+DEPLOYMENT.md
+
+# Scripts
+scripts/
+
+# SQLite (old development database)
+prisma/dev.db
+prisma/dev.db-journal
