@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  // Matches where this player sits out
+  sitOutMatches Match[] @relation("SitOutPlayer")
+
+  // Matches where this player is on Team A
+  teamAPlayer1Matches Match[] @relation("TeamAPlayer1")
+  teamAPlayer2Matches Match[] @relation("TeamAPlayer2")
+
+  // Matches where this player is on Team B
+  teamBPlayer1Matches Match[] @relation("TeamBPlayer1")
+  teamBPlayer2Matches Match[] @relation("TeamBPlayer2")
+}
+
+model Season {
+  id           Int      @id @default(autoincrement())
+  name         String
+  createdAt    DateTime @default(now())
+  status       String   @default("ACTIVE") // "ACTIVE" or "COMPLETED"
+  totalMatches Int // 15, 30, 45, or 60
+
+  matches Match[]
+}
+
+model Match {
+  id            Int       @id @default(autoincrement())
+  season        Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId      Int
+  matchNumber   Int // 1 to totalMatches
+  
+  // Sit-out player
+  sitOutPlayer   Player @relation("SitOutPlayer", fields: [sitOutPlayerId], references: [id])
+  sitOutPlayerId Int
+
+  // Team A (2 players)
+  teamAPlayer1   Player @relation("TeamAPlayer1", fields: [teamAPlayer1Id], references: [id])
+  teamAPlayer1Id Int
+  teamAPlayer2   Player @relation("TeamAPlayer2", fields: [teamAPlayer2Id], references: [id])
+  teamAPlayer2Id Int
+
+  // Team B (2 players)
+  teamBPlayer1   Player @relation("TeamBPlayer1", fields: [teamBPlayer1Id], references: [id])
+  teamBPlayer1Id Int
+  teamBPlayer2   Player @relation("TeamBPlayer2", fields: [teamBPlayer2Id], references: [id])
+  teamBPlayer2Id Int
+
+  // Result (nullable until match is played)
+  teamAGames Int?
+  teamBGames Int?
+  winnerTeam String? // "A" or "B"
+  playedAt   DateTime?
+
+  @@unique([seasonId, matchNumber])
+}

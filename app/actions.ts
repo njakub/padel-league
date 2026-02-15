@@ -1,0 +1,233 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { generateSchedule, mapToPlayerIds } from "@/lib/schedule-generator";
+import { parseMatchResult } from "@/lib/scoring";
+
+/**
+ * Create a new season with generated schedule
+ */
+export async function createSeason(
+  totalMatches: 15 | 30 | 45 | 60,
+  name?: string,
+) {
+  try {
+    // Check if there's already an active season
+    const existingActive = await prisma.season.findFirst({
+      where: { status: "ACTIVE" },
+    });
+
+    if (existingActive) {
+      return {
+        success: false,
+        error: "There is already an active season. Please complete it first.",
+      };
+    }
+
+    // Get all players (should be exactly 5)
+    const players = await prisma.player.findMany({
+      orderBy: { id: "asc" },
+    });
+
+    if (players.length !== 5) {
+      return {
+        success: false,
+        error: "System requires exactly 5 players to be configured.",
+      };
+    }
+
+    // Generate schedule
+    const schedule = generateSchedule(totalMatches);
+    const playerIds = players.map((p) => p.id);
+    const matchesData = mapToPlayerIds(schedule, playerIds);
+
+    // Count existing seasons to generate default name
+    const seasonCount = await prisma.season.count();
+    const seasonName = name || `Season ${seasonCount + 1}`;
+
+    // Create season with matches
+    const season = await prisma.season.create({
+      data: {
+        name: seasonName,
+        totalMatches,
+        status: "ACTIVE",
+        matches: {
+          create: matchesData.map((match) => ({
+            matchNumber: match.matchNumber,
+            sitOutPlayerId: match.sitOutPlayerId,
+            teamAPlayer1Id: match.teamAPlayer1Id,
+            teamAPlayer2Id: match.teamAPlayer2Id,
+            teamBPlayer1Id: match.teamBPlayer1Id,
+            teamBPlayer2Id: match.teamBPlayer2Id,
+          })),
+        },
+      },
+    });
+
+    revalidatePath("/");
+    return { success: true, seasonId: season.id };
+  } catch (error) {
+    console.error("Error creating season:", error);
+    return {
+      success: false,
+      error: "Failed to create season. Please try again.",
+    };
+  }
+}
+
+/**
+ * Record or update a match result
+ */
+export async function recordMatchResult(
+  matchId: number,
+  teamAGames: number,
+  teamBGames: number,
+) {
+  try {
+    // Validate score
+    const result = parseMatchResult(teamAGames, teamBGames);
+    if (!result) {
+      return {
+        success: false,
+        error:
+          "Invalid score. One team must have exactly 4 games, the other 0-3.",
+      };
+    }
+
+    // Update match
+    const match = await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        teamAGames: result.teamAGames,
+        teamBGames: result.teamBGames,
+        winnerTeam: result.winnerTeam,
+        playedAt: new Date(),
+      },
+      include: {
+        season: true,
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/season/${match.seasonId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error recording match result:", error);
+    return {
+      success: false,
+      error: "Failed to record result. Please try again.",
+    };
+  }
+}
+
+/**
+ * Complete a season (mark as COMPLETED)
+ */
+export async function completeSeason(seasonId: number) {
+  try {
+    // Check if all matches have results
+    const season = await prisma.season.findUnique({
+      where: { id: seasonId },
+      include: {
+        matches: true,
+      },
+    });
+
+    if (!season) {
+      return { success: false, error: "Season not found." };
+    }
+
+    const incompletMatches = season.matches.filter(
+      (m) => m.winnerTeam === null,
+    );
+    if (incompletMatches.length > 0) {
+      return {
+        success: false,
+        error: `Cannot complete season. ${incompletMatches.length} match(es) still need results.`,
+      };
+    }
+
+    await prisma.season.update({
+      where: { id: seasonId },
+      data: { status: "COMPLETED" },
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/season/${seasonId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error completing season:", error);
+    return {
+      success: false,
+      error: "Failed to complete season. Please try again.",
+    };
+  }
+}
+
+/**
+ * Delete a match result (reset to unplayed)
+ */
+export async function deleteMatchResult(matchId: number) {
+  try {
+    const match = await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        teamAGames: null,
+        teamBGames: null,
+        winnerTeam: null,
+        playedAt: null,
+      },
+      include: {
+        season: true,
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/season/${match.seasonId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting match result:", error);
+    return {
+      success: false,
+      error: "Failed to delete result. Please try again.",
+    };
+  }
+}
+
+/**
+ * Delete a season (and all its matches)
+ */
+export async function deleteSeason(seasonId: number) {
+  try {
+    const season = await prisma.season.findUnique({
+      where: { id: seasonId },
+      include: {
+        matches: true,
+      },
+    });
+
+    if (!season) {
+      return { success: false, error: "Season not found." };
+    }
+
+    // Delete the season (matches will be cascade deleted)
+    await prisma.season.delete({
+      where: { id: seasonId },
+    });
+
+    revalidatePath("/");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting season:", error);
+    return {
+      success: false,
+      error: "Failed to delete season. Please try again.",
+    };
+  }
+}
