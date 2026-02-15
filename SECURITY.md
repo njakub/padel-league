@@ -69,7 +69,6 @@ If credentials are accidentally exposed:
    - Go to https://console.neon.tech
    - Select your project
    - Go to Settings → Reset password
-   
 2. Update `.env` locally with new credentials
 
 3. Update Vercel environment variables:
@@ -85,6 +84,7 @@ If credentials are accidentally exposed:
 ## Monitoring
 
 Regularly check:
+
 - Neon dashboard for unusual activity
 - Vercel logs for errors or suspicious requests
 - Git history to ensure no secrets committed

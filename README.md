@@ -87,6 +87,7 @@ npx prisma migrate dev --name init
 ```
 
 This will:
+
 - Connect to your Neon PostgreSQL database
 - Create all necessary tables
 - Generate Prisma Client
@@ -252,6 +253,7 @@ npm run test:ui
 #### 1. Prepare Your Database
 
 Get your Neon connection strings from the Neon dashboard:
+
 - **Pooled connection** (with `-pooler` in the hostname) - use for `DATABASE_URL`
 - **Direct connection** (without `-pooler`) - use for `DIRECT_URL`
 
@@ -303,12 +305,13 @@ Or use Prisma Studio to manually add the 5 players.
 
 Set these in your Vercel project settings:
 
-| Variable | Value | Environment |
-|----------|-------|-------------|
+| Variable       | Value                                       | Environment                      |
+| -------------- | ------------------------------------------- | -------------------------------- |
 | `DATABASE_URL` | `postgresql://USER:PASSWORD@HOST-pooler...` | Production, Preview, Development |
-| `DIRECT_URL` | `postgresql://USER:PASSWORD@HOST...` | Production, Preview, Development |
+| `DIRECT_URL`   | `postgresql://USER:PASSWORD@HOST...`        | Production, Preview, Development |
 
-**Important**: 
+**Important**:
+
 - Use the **pooled connection** (`-pooler` hostname) for `DATABASE_URL` - this is optimized for serverless
 - Use the **direct connection** for `DIRECT_URL` - this is used for migrations during build
 - Both URLs should end with `?sslmode=require`
@@ -316,6 +319,7 @@ Set these in your Vercel project settings:
 ### Build Configuration
 
 The `build` script in `package.json` automatically handles:
+
 1. `prisma generate` - Generate Prisma Client
 2. `prisma migrate deploy` - Apply migrations to production
 3. `next build` - Build Next.js application
@@ -331,14 +335,17 @@ No additional configuration needed!
 ### Troubleshooting
 
 **Build fails with "Cannot find module '@prisma/client'"**
+
 - Ensure `postinstall` script includes `prisma generate`
 
 **Database connection errors**
+
 - Verify environment variables are set correctly in Vercel
 - Check that your Neon database allows connections from Vercel IPs (it should by default)
 - Ensure connection strings include `?sslmode=require`
 
 **Migration errors**
+
 - Use `DIRECT_URL` for migrations, not the pooled connection
 - Ensure `DIRECT_URL` is set in Vercel environment variables
 

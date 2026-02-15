@@ -36,16 +36,19 @@ export default function MatchListWithTabs({
   // Find the last completed match (highest match number with a result)
   const lastCompletedMatch = useMemo(() => {
     return completedMatches.length > 0
-      ? completedMatches.reduce((latest, current) => 
-          current.matchNumber > latest.matchNumber ? current : latest
+      ? completedMatches.reduce((latest, current) =>
+          current.matchNumber > latest.matchNumber ? current : latest,
         )
       : null;
   }, [completedMatches]);
 
   // Get unique sit-out players and their counts
   const sitOutStats = useMemo(() => {
-    const stats = new Map<string, { pending: number; completed: number; total: number }>();
-    
+    const stats = new Map<
+      string,
+      { pending: number; completed: number; total: number }
+    >();
+
     matches.forEach((match) => {
       const name = match.sitOutPlayer.name;
       if (!stats.has(name)) {
@@ -59,38 +62,44 @@ export default function MatchListWithTabs({
         stat.completed++;
       }
     });
-    
-    return Array.from(stats.entries()).map(([name, counts]) => ({
-      name,
-      ...counts,
-    })).sort((a, b) => a.name.localeCompare(b.name));
+
+    return Array.from(stats.entries())
+      .map(([name, counts]) => ({
+        name,
+        ...counts,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [matches]);
 
   // Calculate recommended next to sit out (player with fewest completed sit-outs)
   const recommendedNextSitOut = useMemo(() => {
     if (sitOutStats.length === 0) return null;
-    
+
     // Find the minimum completed count
-    const minCompleted = Math.min(...sitOutStats.map(s => s.completed));
-    
+    const minCompleted = Math.min(...sitOutStats.map((s) => s.completed));
+
     // Get all players with the minimum count
-    const candidates = sitOutStats.filter(s => s.completed === minCompleted);
-    
+    const candidates = sitOutStats.filter((s) => s.completed === minCompleted);
+
     // If there's a tie, exclude the last person who sat out
     if (candidates.length > 1 && lastCompletedMatch) {
-      const filtered = candidates.filter(c => c.name !== lastCompletedMatch.sitOutPlayer.name);
+      const filtered = candidates.filter(
+        (c) => c.name !== lastCompletedMatch.sitOutPlayer.name,
+      );
       // If filtering leaves us with candidates, use those; otherwise use all candidates
       return filtered.length > 0 ? filtered : candidates;
     }
-    
+
     return candidates;
   }, [sitOutStats, lastCompletedMatch]);
 
-  const baseMatches = activeTab === "pending" ? pendingMatches : completedMatches;
-  
-  const displayMatches = sitOutFilter === "all" 
-    ? baseMatches 
-    : baseMatches.filter((m) => m.sitOutPlayer.name === sitOutFilter);
+  const baseMatches =
+    activeTab === "pending" ? pendingMatches : completedMatches;
+
+  const displayMatches =
+    sitOutFilter === "all"
+      ? baseMatches
+      : baseMatches.filter((m) => m.sitOutPlayer.name === sitOutFilter);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
@@ -103,7 +112,8 @@ export default function MatchListWithTabs({
         <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="text-xs text-blue-900">
             <span className="font-semibold">Last to sit out:</span>{" "}
-            {lastCompletedMatch.sitOutPlayer.name} (Match {lastCompletedMatch.matchNumber})
+            {lastCompletedMatch.sitOutPlayer.name} (Match{" "}
+            {lastCompletedMatch.matchNumber})
           </div>
         </div>
       )}
@@ -113,9 +123,12 @@ export default function MatchListWithTabs({
         <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
           <div className="text-xs text-green-900">
             <span className="font-semibold">Recommended next to sit out:</span>{" "}
-            {recommendedNextSitOut.map(p => p.name).join(" or ")}
+            {recommendedNextSitOut.map((p) => p.name).join(" or ")}
             {recommendedNextSitOut.length === 1 && (
-              <span className="text-green-700"> ({recommendedNextSitOut[0].completed} completed)</span>
+              <span className="text-green-700">
+                {" "}
+                ({recommendedNextSitOut[0].completed} completed)
+              </span>
             )}
           </div>
         </div>
@@ -128,21 +141,25 @@ export default function MatchListWithTabs({
         </div>
         <div className="grid grid-cols-5 gap-2">
           {sitOutStats.map((stat) => {
-            const isLastSitOut = lastCompletedMatch?.sitOutPlayer.name === stat.name;
-            const isRecommended = recommendedNextSitOut?.some(r => r.name === stat.name) || false;
-            
+            const isLastSitOut =
+              lastCompletedMatch?.sitOutPlayer.name === stat.name;
+            const isRecommended =
+              recommendedNextSitOut?.some((r) => r.name === stat.name) || false;
+
             return (
-              <div 
-                key={stat.name} 
+              <div
+                key={stat.name}
                 className={`text-center p-1 rounded ${
-                  isLastSitOut 
-                    ? 'bg-blue-100 border border-blue-300' 
+                  isLastSitOut
+                    ? "bg-blue-100 border border-blue-300"
                     : isRecommended
-                    ? 'bg-green-100 border border-green-300'
-                    : ''
+                      ? "bg-green-100 border border-green-300"
+                      : ""
                 }`}
               >
-                <div className="text-xs font-medium text-gray-900">{stat.name}</div>
+                <div className="text-xs font-medium text-gray-900">
+                  {stat.name}
+                </div>
                 <div className="text-xs text-gray-600">
                   {stat.completed}/{stat.total}
                 </div>
@@ -178,7 +195,10 @@ export default function MatchListWithTabs({
 
       {/* Sit-out Filter */}
       <div className="mb-4">
-        <label htmlFor="sitOutFilter" className="block text-xs font-medium text-gray-700 mb-1">
+        <label
+          htmlFor="sitOutFilter"
+          className="block text-xs font-medium text-gray-700 mb-1"
+        >
           Filter by sit-out player
         </label>
         <select
@@ -190,7 +210,8 @@ export default function MatchListWithTabs({
           <option value="all">All matches ({baseMatches.length})</option>
           {sitOutStats.map((stat) => (
             <option key={stat.name} value={stat.name}>
-              {stat.name} sits out ({activeTab === "pending" ? stat.pending : stat.completed} matches)
+              {stat.name} sits out (
+              {activeTab === "pending" ? stat.pending : stat.completed} matches)
             </option>
           ))}
         </select>

@@ -30,16 +30,19 @@ git push origin main
 In the Vercel project settings, add these environment variables:
 
 **DATABASE_URL** (Pooled Connection - for runtime)
+
 ```
 postgresql://neondb_owner:npg_pMa9wISi8vTH@ep-hidden-darkness-abq6jphg-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require
 ```
 
 **DIRECT_URL** (Direct Connection - for migrations)
+
 ```
 postgresql://neondb_owner:npg_pMa9wISi8vTH@ep-hidden-darkness-abq6jphg.eu-west-2.aws.neon.tech/neondb?sslmode=require
 ```
 
 **Apply to all environments:**
+
 - ✅ Production
 - ✅ Preview
 - ✅ Development
@@ -47,6 +50,7 @@ postgresql://neondb_owner:npg_pMa9wISi8vTH@ep-hidden-darkness-abq6jphg.eu-west-2
 ### 4. Deploy
 
 Click "Deploy" - Vercel will:
+
 1. Install dependencies
 2. Generate Prisma Client
 3. Run database migrations
@@ -87,11 +91,13 @@ npm run db:seed
 ## Environment Variable Security
 
 ✅ **What's Protected:**
+
 - `.env` file is in `.gitignore` and NOT committed to Git
 - Connection strings are stored only in Vercel's secure environment variables
 - Credentials are encrypted at rest in Vercel
 
 ⚠️ **Important Notes:**
+
 - Never share your `.env` file
 - Never commit credentials to Git
 - Rotate passwords if accidentally exposed
@@ -100,6 +106,7 @@ npm run db:seed
 ## Continuous Deployment
 
 Once set up, every push to `main` will automatically:
+
 1. Trigger a new deployment
 2. Run migrations if schema changed
 3. Build and deploy the updated app
@@ -107,18 +114,21 @@ Once set up, every push to `main` will automatically:
 ## Monitoring
 
 **View Logs:**
+
 - Go to your Vercel project dashboard
 - Click "Deployments"
 - Select a deployment
 - View build logs and runtime logs
 
 **Database Management:**
+
 - Use Neon dashboard: https://console.neon.tech
 - Monitor connections, query performance, and storage
 
 ## Rollback
 
 If something goes wrong:
+
 1. Go to Vercel dashboard
 2. Click "Deployments"
 3. Find a previous working deployment
@@ -129,9 +139,11 @@ If something goes wrong:
 ### Build Fails
 
 **Error: Cannot find module '@prisma/client'**
+
 - Solution: Ensure `postinstall` script runs `prisma generate`
 
 **Error: P1001 Can't reach database**
+
 - Check environment variables are set correctly
 - Verify Neon database is running
 - Ensure connection string includes `?sslmode=require`
@@ -139,16 +151,19 @@ If something goes wrong:
 ### Runtime Errors
 
 **Error: PrismaClient is unable to run in Vercel Edge Functions**
+
 - This app uses Node.js runtime (default), not Edge
 - Verify in `vercel.json` or route configs
 
 **Error: Too many database connections**
+
 - Use the **pooled** connection string for `DATABASE_URL`
 - Check you're not opening multiple Prisma clients
 
 ### Migration Issues
 
 **Error: Migration failed to apply**
+
 - Ensure `DIRECT_URL` is set (not pooled)
 - Check migration files are committed to Git
 - Verify database permissions

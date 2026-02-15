@@ -149,14 +149,14 @@ export function verifyScheduleBalance(matches: MatchConfig[]): {
   }
 
   // Verify for each teammate pair, opponent pair counts are equal
-  for (const [pair, opponents] of opponentPairCounts) {
+  Array.from(opponentPairCounts.entries()).forEach(([pair, opponents]) => {
     const opponentCounts = Array.from(opponents.values());
     const expectedOpponentCount = opponentCounts[0];
 
     if (!opponentCounts.every((c) => c === expectedOpponentCount)) {
       issues.push(`Opponent balance violated for teammate pair ${pair}`);
     }
-  }
+  });
 
   return {
     isBalanced: issues.length === 0,
