@@ -129,7 +129,7 @@ export function calculateStandings(
   const stats = new Map<number, PlayerStats>();
 
   // Initialize stats for all players
-  for (const [playerId, playerName] of players) {
+  Array.from(players.entries()).forEach(([playerId, playerName]) => {
     stats.set(playerId, {
       playerId,
       playerName,
@@ -140,7 +140,7 @@ export function calculateStandings(
       gamesAgainst: 0,
       points: 0,
     });
-  }
+  });
 
   // Process each completed match
   for (const match of matches) {

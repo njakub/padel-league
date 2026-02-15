@@ -108,7 +108,7 @@ describe("Schedule Generator", () => {
       const verification = verifyScheduleBalance(schedule);
 
       // For each teammate pair, check opponent distribution
-      for (const [pair, opponents] of verification.opponentPairCounts) {
+      Array.from(verification.opponentPairCounts.entries()).forEach(([pair, opponents]) => {
         const opponentCounts = Array.from(opponents.values());
         const firstOpponentCount = opponentCounts[0];
 
@@ -120,7 +120,7 @@ describe("Schedule Generator", () => {
         // For a teammate pair appearing 3 times, facing 3 different opponent pairs
         expect(opponentCounts).toHaveLength(3);
         expect(firstOpponentCount).toBe(1);
-      }
+      });
     });
 
     it("should verify each sit-out appears 3 times in 15 matches", () => {
