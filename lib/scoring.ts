@@ -110,7 +110,7 @@ export interface MatchWithPlayers {
   teamAPlayer2Id: number;
   teamBPlayer1Id: number;
   teamBPlayer2Id: number;
-  sitOutPlayerId: number;
+  sitOutPlayerId: number | null; // null for 4-player Wednesday League matches
   teamAGames: number | null;
   teamBGames: number | null;
   winnerTeam: string | null;
@@ -198,4 +198,95 @@ export function calculateStandings(
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.gamesFor - a.gamesFor;
   });
+}
+
+export interface PairingStats {
+  player1Id: number;
+  player1Name: string;
+  player2Id: number;
+  player2Name: string;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  gamesFor: number;
+  gamesAgainst: number;
+  winRate: number; // 0-100
+}
+
+/**
+ * Calculate per-pair stats: how each duo performs when playing together.
+ * Sorted by win rate (desc), then wins, then games for.
+ */
+export function calculatePairingStats(
+  matches: MatchWithPlayers[],
+  players: Map<number, string>,
+): PairingStats[] {
+  const stats = new Map<string, PairingStats>();
+
+  const pairKey = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+  for (const match of matches) {
+    if (
+      match.teamAGames === null ||
+      match.teamBGames === null ||
+      !match.winnerTeam
+    )
+      continue;
+
+    const teamAWon = match.winnerTeam === "A";
+    const teams = [
+      {
+        p1: match.teamAPlayer1Id,
+        p2: match.teamAPlayer2Id,
+        won: teamAWon,
+        gf: match.teamAGames,
+        ga: match.teamBGames,
+      },
+      {
+        p1: match.teamBPlayer1Id,
+        p2: match.teamBPlayer2Id,
+        won: !teamAWon,
+        gf: match.teamBGames,
+        ga: match.teamAGames,
+      },
+    ];
+
+    for (const { p1, p2, won, gf, ga } of teams) {
+      const key = pairKey(p1, p2);
+      if (!stats.has(key)) {
+        const [lo, hi] = p1 < p2 ? [p1, p2] : [p2, p1];
+        stats.set(key, {
+          player1Id: lo,
+          player1Name: players.get(lo) ?? String(lo),
+          player2Id: hi,
+          player2Name: players.get(hi) ?? String(hi),
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          gamesFor: 0,
+          gamesAgainst: 0,
+          winRate: 0,
+        });
+      }
+      const s = stats.get(key)!;
+      s.matchesPlayed++;
+      s.gamesFor += gf;
+      s.gamesAgainst += ga;
+      if (won) s.wins++;
+      else s.losses++;
+    }
+  }
+
+  return Array.from(stats.values())
+    .filter((s) => s.matchesPlayed > 0)
+    .map((s) => ({
+      ...s,
+      winRate:
+        s.matchesPlayed > 0 ? Math.round((s.wins / s.matchesPlayed) * 100) : 0,
+    }))
+    .sort((a, b) => {
+      if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return b.gamesFor - a.gamesFor;
+    });
 }

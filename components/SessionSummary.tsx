@@ -9,7 +9,7 @@ interface Match {
   teamBGames: number | null;
   winnerTeam: string | null;
   playedAt: Date | null;
-  sitOutPlayer: { id: number; name: string };
+  sitOutPlayer: { id: number; name: string } | null;
   teamAPlayer1: { id: number; name: string };
   teamAPlayer2: { id: number; name: string };
   teamBPlayer1: { id: number; name: string };
@@ -77,7 +77,7 @@ export default function SessionSummary({
       allPlayers.add(match.teamAPlayer2);
       allPlayers.add(match.teamBPlayer1);
       allPlayers.add(match.teamBPlayer2);
-      allPlayers.add(match.sitOutPlayer);
+      if (match.sitOutPlayer) allPlayers.add(match.sitOutPlayer);
     });
 
     allPlayers.forEach((player) => {
@@ -96,7 +96,11 @@ export default function SessionSummary({
 
     // Calculate stats from today's matches
     todayMatches.forEach((match) => {
-      if (!match.winnerTeam || match.teamAGames === null || match.teamBGames === null)
+      if (
+        !match.winnerTeam ||
+        match.teamAGames === null ||
+        match.teamBGames === null
+      )
         return;
 
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
@@ -134,8 +138,10 @@ export default function SessionSummary({
       });
 
       // Update sit-out count
-      const sitOutStats = statsMap.get(match.sitOutPlayer.id)!;
-      sitOutStats.sitOuts++;
+      if (match.sitOutPlayer) {
+        const sitOutStats = statsMap.get(match.sitOutPlayer.id)!;
+        if (sitOutStats) sitOutStats.sitOuts++;
+      }
     });
 
     // Convert to array and sort by points
@@ -146,7 +152,10 @@ export default function SessionSummary({
 
   // Calculate overall season stats (all matches)
   const overallStats = useMemo(() => {
-    const statsMap = new Map<number, { playerId: number; name: string; points: number }>();
+    const statsMap = new Map<
+      number,
+      { playerId: number; name: string; points: number }
+    >();
 
     // Initialize all players from all matches
     const allPlayers = new Set<{ id: number; name: string }>();
@@ -167,7 +176,11 @@ export default function SessionSummary({
 
     // Calculate points from ALL matches
     matches.forEach((match) => {
-      if (!match.winnerTeam || match.teamAGames === null || match.teamBGames === null)
+      if (
+        !match.winnerTeam ||
+        match.teamAGames === null ||
+        match.teamBGames === null
+      )
         return;
 
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
@@ -200,7 +213,10 @@ export default function SessionSummary({
 
   // Calculate stats before today's session
   const beforeSessionStats = useMemo(() => {
-    const statsMap = new Map<number, { playerId: number; name: string; points: number }>();
+    const statsMap = new Map<
+      number,
+      { playerId: number; name: string; points: number }
+    >();
 
     // Get all players
     const allPlayers = new Set<{ id: number; name: string }>();
@@ -228,7 +244,11 @@ export default function SessionSummary({
     });
 
     beforeMatches.forEach((match) => {
-      if (!match.winnerTeam || match.teamAGames === null || match.teamBGames === null)
+      if (
+        !match.winnerTeam ||
+        match.teamAGames === null ||
+        match.teamBGames === null
+      )
         return;
 
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
@@ -264,8 +284,12 @@ export default function SessionSummary({
     const comparisons: PlayerComparison[] = [];
 
     sessionStats.forEach((sessionStat) => {
-      const overallStat = overallStats.find(s => s.playerId === sessionStat.playerId);
-      const beforeStat = beforeSessionStats.find(s => s.playerId === sessionStat.playerId);
+      const overallStat = overallStats.find(
+        (s) => s.playerId === sessionStat.playerId,
+      );
+      const beforeStat = beforeSessionStats.find(
+        (s) => s.playerId === sessionStat.playerId,
+      );
 
       if (overallStat && beforeStat) {
         comparisons.push({
@@ -334,33 +358,43 @@ export default function SessionSummary({
                   <div className="text-2xl font-bold text-blue-600">
                     {todayMatches.length}
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">Matches Played</div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    Matches Played
+                  </div>
                 </div>
                 <div className="bg-green-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-green-600">
                     {todayMatches.reduce(
-                      (sum, m) => sum + (m.teamAGames || 0) + (m.teamBGames || 0),
-                      0
+                      (sum, m) =>
+                        sum + (m.teamAGames || 0) + (m.teamBGames || 0),
+                      0,
                     )}
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">Total Games</div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    Total Games
+                  </div>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-purple-600">
                     {sessionStats.filter((s) => s.matchesPlayed > 0).length}
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">Players Active</div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    Players Active
+                  </div>
                 </div>
                 <div className="bg-orange-50 rounded-lg p-2 text-center">
                   <div className="text-2xl font-bold text-orange-600">
                     {Math.round(
                       todayMatches.reduce(
-                        (sum, m) => sum + (m.teamAGames || 0) + (m.teamBGames || 0),
-                        0
-                      ) / todayMatches.length
+                        (sum, m) =>
+                          sum + (m.teamAGames || 0) + (m.teamBGames || 0),
+                        0,
+                      ) / todayMatches.length,
                     )}
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">Avg Games/Match</div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    Avg Games/Match
+                  </div>
                 </div>
               </div>
 
@@ -397,7 +431,9 @@ export default function SessionSummary({
                       {playerComparisons.map((player) => (
                         <tr
                           key={player.playerId}
-                          className={player.overallRank === 1 ? "bg-yellow-50" : ""}
+                          className={
+                            player.overallRank === 1 ? "bg-yellow-50" : ""
+                          }
                         >
                           <td className="px-1.5 py-1 font-medium text-gray-900">
                             {player.name}
@@ -448,13 +484,18 @@ export default function SessionSummary({
                 </h3>
                 <div className="space-y-1.5">
                   {sessionStats.map((stats) => {
-                    const maxPoints = Math.max(...sessionStats.map((s) => s.points));
-                    const percentage = maxPoints > 0 ? (stats.points / maxPoints) * 100 : 0;
-                    
+                    const maxPoints = Math.max(
+                      ...sessionStats.map((s) => s.points),
+                    );
+                    const percentage =
+                      maxPoints > 0 ? (stats.points / maxPoints) * 100 : 0;
+
                     return (
                       <div key={stats.playerId}>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-gray-700">{stats.name}</span>
+                          <span className="font-medium text-gray-700">
+                            {stats.name}
+                          </span>
                           <span className="text-gray-600">
                             {stats.points} pts • {stats.wins}W-{stats.losses}L
                           </span>

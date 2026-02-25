@@ -33,7 +33,8 @@ model Season {
   name         String
   createdAt    DateTime @default(now())
   status       String   @default("ACTIVE") // "ACTIVE" or "COMPLETED"
-  totalMatches Int // 15, 30, 45, or 60
+  totalMatches Int // Sunday: 15, 30, 45, 60 | Wednesday: 12, 24, 36
+  leagueType   String   @default("SUNDAY") // "SUNDAY" or "WEDNESDAY"
 
   matches Match[]
 }
@@ -44,9 +45,9 @@ model Match {
   seasonId      Int
   matchNumber   Int // 1 to totalMatches
   
-  // Sit-out player
-  sitOutPlayer   Player @relation("SitOutPlayer", fields: [sitOutPlayerId], references: [id])
-  sitOutPlayerId Int
+  // Sit-out player (null for 4-player Wednesday League matches)
+  sitOutPlayer   Player? @relation("SitOutPlayer", fields: [sitOutPlayerId], references: [id])
+  sitOutPlayerId Int?
 
   // Team A (2 players)
   teamAPlayer1   Player @relation("TeamAPlayer1", fields: [teamAPlayer1Id], references: [id])

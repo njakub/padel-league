@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings } from "@/lib/scoring";
+import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
 import CompleteSeasonButton from "@/components/CompleteSeasonButton";
 import DeleteSeasonButton from "@/components/DeleteSeasonButton";
 import MatchListWithTabs from "@/components/MatchListWithTabs";
 import SessionSummary from "@/components/SessionSummary";
+import PairingsTable from "@/components/PairingsTable";
 
 async function getSeason(id: number) {
   return await prisma.season.findUnique({
@@ -50,8 +51,23 @@ export default async function SeasonPage({
     notFound();
   }
 
-  const playerMap = new Map(players.map((p) => [p.id, p.name]));
-  const standings = calculateStandings(season.matches, playerMap);
+  // Scope standings to the league's roster so non-participating players are excluded
+  const isWednesday = season.leagueType === "WEDNESDAY";
+  const leaguePlayers = isWednesday
+    ? players.filter((p) =>
+        ["Jakub", "Joe", "Matt", "Charlie"].includes(p.name),
+      )
+    : players;
+
+  const playerMap = new Map(leaguePlayers.map((p) => [p.id, p.name]));
+  const standings = calculateStandings(
+    season.matches as Parameters<typeof calculateStandings>[0],
+    playerMap,
+  );
+  const pairings = calculatePairingStats(
+    season.matches as Parameters<typeof calculatePairingStats>[0],
+    playerMap,
+  );
 
   const completedMatches = season.matches.filter((m) => m.winnerTeam !== null);
   const progress = {
@@ -74,7 +90,16 @@ export default async function SeasonPage({
             ← Back to Dashboard
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">{season.name}</h1>
-          <div className="flex gap-4 mt-2 text-sm text-gray-600">
+          <div className="flex gap-2 mt-2 text-sm text-gray-600 flex-wrap">
+            <span
+              className={`px-2 py-1 rounded ${
+                isWednesday
+                  ? "bg-purple-100 text-purple-800"
+                  : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {isWednesday ? "🌙 Wednesday League" : "☀️ Sunday League"}
+            </span>
             <span
               className={`px-2 py-1 rounded ${season.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
             >
@@ -167,6 +192,19 @@ export default async function SeasonPage({
           </table>
         </div>
       </div>
+
+      {/* Pairing Stats */}
+      {pairings.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">
+            Pairing Performance
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            How each duo has performed playing together this season
+          </p>
+          <PairingsTable pairings={pairings} title="" />
+        </div>
+      )}
 
       {/* Session Summary - Today's games */}
       <SessionSummary matches={season.matches} seasonName={season.name} />

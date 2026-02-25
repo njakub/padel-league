@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { generateSchedule, mapToPlayerIds } from "@/lib/schedule-generator";
+import { generateSchedule4, mapToPlayerIds4 } from "@/lib/schedule-generator-4";
 import { parseMatchResult } from "@/lib/scoring";
 
 /**
@@ -14,27 +15,30 @@ export async function createSeason(
   name?: string,
 ) {
   try {
-    // Check if there's already an active season
+    // Check if there's already an active Sunday season
     const existingActive = await prisma.season.findFirst({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", leagueType: "SUNDAY" },
     });
 
     if (existingActive) {
       return {
         success: false,
-        error: "There is already an active season. Please complete it first.",
+        error:
+          "There is already an active Sunday League season. Please complete it first.",
       };
     }
 
-    // Get all players (should be exactly 5)
+    // Get Sunday League players (Jakub, Joe, Jon, Matt, Charlie — all 5)
     const players = await prisma.player.findMany({
+      where: { name: { in: ["Jakub", "Joe", "Jon", "Matt", "Charlie"] } },
       orderBy: { id: "asc" },
     });
 
     if (players.length !== 5) {
       return {
         success: false,
-        error: "System requires exactly 5 players to be configured.",
+        error:
+          "System requires exactly 5 Sunday League players to be configured.",
       };
     }
 
@@ -43,8 +47,10 @@ export async function createSeason(
     const playerIds = players.map((p) => p.id);
     const matchesData = mapToPlayerIds(schedule, playerIds);
 
-    // Count existing seasons to generate default name
-    const seasonCount = await prisma.season.count();
+    // Count existing Sunday seasons to generate default name
+    const seasonCount = await prisma.season.count({
+      where: { leagueType: "SUNDAY" },
+    });
     const seasonName = name || `Season ${seasonCount + 1}`;
 
     // Create season with matches
@@ -53,6 +59,7 @@ export async function createSeason(
         name: seasonName,
         totalMatches,
         status: "ACTIVE",
+        leagueType: "SUNDAY",
         matches: {
           create: matchesData.map((match) => ({
             matchNumber: match.matchNumber,
@@ -228,6 +235,82 @@ export async function deleteSeason(seasonId: number) {
     return {
       success: false,
       error: "Failed to delete season. Please try again.",
+    };
+  }
+}
+
+/**
+ * Create a new Wednesday League season (4 players: Jakub, Joe, Matt, Charlie)
+ */
+export async function createWednesdaySeason(
+  totalMatches: 12 | 24 | 36,
+  name?: string,
+) {
+  try {
+    // Check if there's already an active Wednesday season
+    const existingActive = await prisma.season.findFirst({
+      where: { status: "ACTIVE", leagueType: "WEDNESDAY" },
+    });
+
+    if (existingActive) {
+      return {
+        success: false,
+        error:
+          "There is already an active Wednesday League season. Please complete it first.",
+      };
+    }
+
+    // Get Wednesday League players (Jakub, Joe, Matt, Charlie — no Jon)
+    const players = await prisma.player.findMany({
+      where: { name: { in: ["Jakub", "Joe", "Matt", "Charlie"] } },
+      orderBy: { id: "asc" },
+    });
+
+    if (players.length !== 4) {
+      return {
+        success: false,
+        error:
+          "System requires exactly 4 Wednesday League players to be configured.",
+      };
+    }
+
+    // Generate schedule
+    const schedule = generateSchedule4(totalMatches);
+    const playerIds = players.map((p) => p.id);
+    const matchesData = mapToPlayerIds4(schedule, playerIds);
+
+    // Count existing Wednesday seasons to generate default name
+    const seasonCount = await prisma.season.count({
+      where: { leagueType: "WEDNESDAY" },
+    });
+    const seasonName = name || `Wednesday Season ${seasonCount + 1}`;
+
+    // Create season with matches (no sitOutPlayerId for 4-player format)
+    const season = await prisma.season.create({
+      data: {
+        name: seasonName,
+        totalMatches,
+        status: "ACTIVE",
+        leagueType: "WEDNESDAY",
+        matches: {
+          create: matchesData.map((match) => ({
+            matchNumber: match.matchNumber,
+            teamAPlayer1Id: match.teamAPlayer1Id,
+            teamAPlayer2Id: match.teamAPlayer2Id,
+            teamBPlayer1Id: match.teamBPlayer1Id,
+            teamBPlayer2Id: match.teamBPlayer2Id,
+          })),
+        },
+      },
+    });
+
+    revalidatePath("/");
+    return { success: true, seasonId: season.id };
+  } catch (error) {
+    console.error("Error creating Wednesday season:", error);
+    return {
+      success: false,
+      error: "Failed to create Wednesday League season. Please try again.",
     };
   }
 }
