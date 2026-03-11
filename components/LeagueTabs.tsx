@@ -389,15 +389,16 @@ export default function LeagueTabs({
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-8">
         <button
           onClick={() => setActiveLeague("sunday")}
-          className={`flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-all ${
+          className={`flex-1 py-2 px-2 sm:py-3 sm:px-4 rounded-lg font-semibold text-sm transition-all ${
             activeLeague === "sunday"
               ? "bg-white shadow text-blue-700"
               : "text-gray-600 hover:text-gray-800"
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1 sm:gap-2">
             <span>☀️</span>
-            <span>Sunday League</span>
+            <span className="hidden sm:inline">Sunday League</span>
+            <span className="sm:hidden">Sunday</span>
             {sundayHasActive && (
               <span
                 className="w-2 h-2 rounded-full bg-green-500 inline-block"
@@ -405,21 +406,22 @@ export default function LeagueTabs({
               />
             )}
           </div>
-          <div className="text-xs font-normal text-gray-500 mt-0.5">
+          <div className="hidden sm:block text-xs font-normal text-gray-500 mt-0.5">
             5 players
           </div>
         </button>
         <button
           onClick={() => setActiveLeague("wednesday")}
-          className={`flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-all ${
+          className={`flex-1 py-2 px-2 sm:py-3 sm:px-4 rounded-lg font-semibold text-sm transition-all ${
             activeLeague === "wednesday"
               ? "bg-white shadow text-purple-700"
               : "text-gray-600 hover:text-gray-800"
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1 sm:gap-2">
             <span>🌙</span>
-            <span>Wednesday League</span>
+            <span className="hidden sm:inline">Wednesday League</span>
+            <span className="sm:hidden">Wed</span>
             {wednesdayHasActive && (
               <span
                 className="w-2 h-2 rounded-full bg-green-500 inline-block"
@@ -427,19 +429,19 @@ export default function LeagueTabs({
               />
             )}
           </div>
-          <div className="text-xs font-normal text-gray-500 mt-0.5">
+          <div className="hidden sm:block text-xs font-normal text-gray-500 mt-0.5">
             4 players
           </div>
         </button>
         <button
           onClick={() => setActiveLeague("adhoc")}
-          className={`flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-all ${
+          className={`flex-1 py-2 px-2 sm:py-3 sm:px-4 rounded-lg font-semibold text-sm transition-all ${
             activeLeague === "adhoc"
               ? "bg-white shadow text-orange-700"
               : "text-gray-600 hover:text-gray-800"
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1 sm:gap-2">
             <span>🎲</span>
             <span>Adhoc</span>
             {adhocHasActive && (
@@ -449,7 +451,7 @@ export default function LeagueTabs({
               />
             )}
           </div>
-          <div className="text-xs font-normal text-gray-500 mt-0.5">
+          <div className="hidden sm:block text-xs font-normal text-gray-500 mt-0.5">
             Any players
           </div>
         </button>

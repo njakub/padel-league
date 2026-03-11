@@ -430,3 +430,31 @@ export async function deleteAdhocMatch(matchId: number) {
     };
   }
 }
+
+/**
+ * Add a new player to the system
+ */
+export async function createPlayer(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { success: false, error: "Player name cannot be empty." };
+  }
+
+  try {
+    await prisma.player.create({ data: { name: trimmed } });
+    revalidatePath("/");
+    return { success: true };
+  } catch (error: unknown) {
+    // Unique constraint violation
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: string }).code === "P2002"
+    ) {
+      return { success: false, error: `"${trimmed}" already exists.` };
+    }
+    console.error("Error creating player:", error);
+    return { success: false, error: "Failed to add player. Please try again." };
+  }
+}
