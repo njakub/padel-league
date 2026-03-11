@@ -7,6 +7,7 @@ import DeleteSeasonButton from "@/components/DeleteSeasonButton";
 import MatchListWithTabs from "@/components/MatchListWithTabs";
 import SessionSummary from "@/components/SessionSummary";
 import PairingsTable from "@/components/PairingsTable";
+import AddAdhocMatchButton from "@/components/AddAdhocMatchButton";
 
 async function getSeason(id: number) {
   return await prisma.season.findUnique({
@@ -53,6 +54,8 @@ export default async function SeasonPage({
 
   // Scope standings to the league's roster so non-participating players are excluded
   const isWednesday = season.leagueType === "WEDNESDAY";
+  const isAdhoc = season.leagueType === "ADHOC";
+  // For adhoc, use all players as the map (any player can appear)
   const leaguePlayers = isWednesday
     ? players.filter((p) =>
         ["Jakub", "Joe", "Matt", "Charlie"].includes(p.name),
@@ -72,11 +75,12 @@ export default async function SeasonPage({
   const completedMatches = season.matches.filter((m) => m.winnerTeam !== null);
   const progress = {
     completed: completedMatches.length,
-    total: season.totalMatches,
+    total: season.totalMatches ?? season.matches.length,
   };
 
-  const canComplete =
-    season.status === "ACTIVE" && progress.completed === progress.total;
+  // Adhoc sessions can always be completed; others need all matches played
+  const canComplete = season.status === "ACTIVE" &&
+    (isAdhoc ? season.matches.length > 0 : progress.completed === progress.total);
 
   return (
     <div className="space-y-6">
@@ -93,12 +97,18 @@ export default async function SeasonPage({
           <div className="flex gap-2 mt-2 text-sm text-gray-600 flex-wrap">
             <span
               className={`px-2 py-1 rounded ${
-                isWednesday
-                  ? "bg-purple-100 text-purple-800"
-                  : "bg-blue-100 text-blue-800"
+                isAdhoc
+                  ? "bg-orange-100 text-orange-800"
+                  : isWednesday
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-blue-100 text-blue-800"
               }`}
             >
-              {isWednesday ? "🌙 Wednesday League" : "☀️ Sunday League"}
+              {isAdhoc
+                ? "🎲 Adhoc Session"
+                : isWednesday
+                  ? "🌙 Wednesday League"
+                  : "☀️ Sunday League"}
             </span>
             <span
               className={`px-2 py-1 rounded ${season.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
@@ -106,27 +116,42 @@ export default async function SeasonPage({
               {season.status}
             </span>
             <span>
-              {progress.completed} / {progress.total} matches completed
+              {isAdhoc
+                ? `${progress.completed} of ${season.matches.length} matches played`
+                : `${progress.completed} / ${progress.total} matches completed`}
             </span>
           </div>
         </div>
 
-        {canComplete && season.status === "ACTIVE" && (
-          <CompleteSeasonButton seasonId={season.id} />
-        )}
-      </div>
-
-      {/* Progress Bar */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className="bg-blue-600 h-3 rounded-full transition-all"
-            style={{
-              width: `${(progress.completed / progress.total) * 100}%`,
-            }}
-          />
+        <div className="flex items-center gap-3">
+          {isAdhoc && season.status === "ACTIVE" && (
+            <AddAdhocMatchButton
+              seasonId={season.id}
+              players={players.map((p) => ({ id: p.id, name: p.name }))}
+            />
+          )}
+          {canComplete && season.status === "ACTIVE" && (
+            <CompleteSeasonButton seasonId={season.id} />
+          )}
         </div>
       </div>
+
+      {/* Progress Bar — not shown for adhoc (no fixed total) */}
+      {!isAdhoc && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-blue-600 h-3 rounded-full transition-all"
+              style={{
+                width:
+                  progress.total > 0
+                    ? `${(progress.completed / progress.total) * 100}%`
+                    : "0%",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Standings */}
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -213,6 +238,7 @@ export default async function SeasonPage({
       <MatchListWithTabs
         matches={season.matches}
         seasonStatus={season.status}
+        isAdhoc={isAdhoc}
       />
 
       {/* Delete Season - Bottom of page */}

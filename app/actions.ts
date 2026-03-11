@@ -147,14 +147,17 @@ export async function completeSeason(seasonId: number) {
       return { success: false, error: "Season not found." };
     }
 
-    const incompletMatches = season.matches.filter(
-      (m) => m.winnerTeam === null,
-    );
-    if (incompletMatches.length > 0) {
-      return {
-        success: false,
-        error: `Cannot complete season. ${incompletMatches.length} match(es) still need results.`,
-      };
+    // ADHOC seasons can be completed at any time (no fixed schedule)
+    if (season.leagueType !== "ADHOC") {
+      const incompletMatches = season.matches.filter(
+        (m) => m.winnerTeam === null,
+      );
+      if (incompletMatches.length > 0) {
+        return {
+          success: false,
+          error: `Cannot complete season. ${incompletMatches.length} match(es) still need results.`,
+        };
+      }
     }
 
     await prisma.season.update({
@@ -311,6 +314,119 @@ export async function createWednesdaySeason(
     return {
       success: false,
       error: "Failed to create Wednesday League season. Please try again.",
+    };
+  }
+}
+
+/**
+ * Create a new Adhoc League session (no fixed schedule or player roster)
+ */
+export async function createAdhocSeason(name?: string) {
+  try {
+    const existingActive = await prisma.season.findFirst({
+      where: { status: "ACTIVE", leagueType: "ADHOC" },
+    });
+
+    if (existingActive) {
+      return {
+        success: false,
+        error:
+          "There is already an active Adhoc League session. Please complete it first.",
+      };
+    }
+
+    const seasonCount = await prisma.season.count({
+      where: { leagueType: "ADHOC" },
+    });
+    const seasonName = name || `Adhoc Session ${seasonCount + 1}`;
+
+    const season = await prisma.season.create({
+      data: {
+        name: seasonName,
+        totalMatches: null,
+        status: "ACTIVE",
+        leagueType: "ADHOC",
+      },
+    });
+
+    revalidatePath("/");
+    return { success: true, seasonId: season.id };
+  } catch (error) {
+    console.error("Error creating adhoc season:", error);
+    return {
+      success: false,
+      error: "Failed to create Adhoc session. Please try again.",
+    };
+  }
+}
+
+/**
+ * Add a match to an Adhoc League session with manually chosen players
+ */
+export async function addAdhocMatch(
+  seasonId: number,
+  teamAPlayer1Id: number,
+  teamAPlayer2Id: number,
+  teamBPlayer1Id: number,
+  teamBPlayer2Id: number,
+) {
+  try {
+    const playerIds = [
+      teamAPlayer1Id,
+      teamAPlayer2Id,
+      teamBPlayer1Id,
+      teamBPlayer2Id,
+    ];
+    if (new Set(playerIds).size !== 4) {
+      return { success: false, error: "All 4 players must be different." };
+    }
+
+    const lastMatch = await prisma.match.findFirst({
+      where: { seasonId },
+      orderBy: { matchNumber: "desc" },
+    });
+    const matchNumber = (lastMatch?.matchNumber ?? 0) + 1;
+
+    await prisma.match.create({
+      data: {
+        seasonId,
+        matchNumber,
+        teamAPlayer1Id,
+        teamAPlayer2Id,
+        teamBPlayer1Id,
+        teamBPlayer2Id,
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/season/${seasonId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error adding adhoc match:", error);
+    return {
+      success: false,
+      error: "Failed to add match. Please try again.",
+    };
+  }
+}
+
+/**
+ * Delete an adhoc match entirely (including any recorded result)
+ */
+export async function deleteAdhocMatch(matchId: number) {
+  try {
+    const match = await prisma.match.delete({
+      where: { id: matchId },
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/season/${match.seasonId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting adhoc match:", error);
+    return {
+      success: false,
+      error: "Failed to delete match. Please try again.",
     };
   }
 }

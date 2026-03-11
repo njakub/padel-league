@@ -33,8 +33,8 @@ model Season {
   name         String
   createdAt    DateTime @default(now())
   status       String   @default("ACTIVE") // "ACTIVE" or "COMPLETED"
-  totalMatches Int // Sunday: 15, 30, 45, 60 | Wednesday: 12, 24, 36
-  leagueType   String   @default("SUNDAY") // "SUNDAY" or "WEDNESDAY"
+  totalMatches Int? // Sunday: 15, 30, 45, 60 | Wednesday: 12, 24, 36 | null for ADHOC
+  leagueType   String   @default("SUNDAY") // "SUNDAY", "WEDNESDAY", or "ADHOC"
 
   matches Match[]
 }

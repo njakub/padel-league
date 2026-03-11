@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import MatchResultForm from "./MatchResultForm";
+import DeleteAdhocMatchButton from "./DeleteAdhocMatchButton";
 
 interface Match {
   id: number;
@@ -19,11 +20,13 @@ interface Match {
 interface MatchListWithTabsProps {
   matches: Match[];
   seasonStatus: string;
+  isAdhoc?: boolean;
 }
 
 export default function MatchListWithTabs({
   matches,
   seasonStatus,
+  isAdhoc = false,
 }: MatchListWithTabsProps) {
   const [activeTab, setActiveTab] = useState<"pending" | "completed">(
     "pending",
@@ -305,10 +308,18 @@ export default function MatchListWithTabs({
                 </div>
               </div>
 
-              {/* Edit button for completed matches */}
+              {/* Edit / Remove row for completed matches */}
               {match.winnerTeam && seasonStatus === "ACTIVE" && (
-                <div className="mt-2 pt-2 border-t border-gray-200 text-right">
+                <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end gap-2">
                   <MatchResultForm match={match} isEdit />
+                  {isAdhoc && <DeleteAdhocMatchButton matchId={match.id} />}
+                </div>
+              )}
+
+              {/* Remove button for pending adhoc matches */}
+              {!match.winnerTeam && isAdhoc && seasonStatus === "ACTIVE" && (
+                <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end">
+                  <DeleteAdhocMatchButton matchId={match.id} />
                 </div>
               )}
             </div>
