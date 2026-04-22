@@ -351,7 +351,7 @@ No additional configuration needed!
 
 ## Algorithm Details
 
-### Base Schedule (15 matches)
+### Sunday League — Base Schedule (15 matches)
 
 For 5 players, there are:
 
@@ -360,7 +360,7 @@ For 5 players, there are:
 
 Total: 5 × 3 = 15 unique match configurations
 
-### Balance Verification
+#### Balance Verification
 
 The schedule generator ensures:
 
@@ -368,6 +368,32 @@ The schedule generator ensures:
 - Each teammate pair faces each of their 3 possible opponent pairs exactly once
 
 For longer seasons (30/45/60), the base schedule is repeated, maintaining proportional balance.
+
+---
+
+### Wednesday League — Base Schedule (14 matches)
+
+Uses Berger's round-robin 1-factorization of K₈:
+
+- Fix player 8 as an anchor; rotate the remaining 7 players across 7 rounds
+- Each round = 2 simultaneous matches on 2 courts — **no one sits out**
+
+Total: 7 rounds × 2 matches = 14 unique match configurations
+
+#### Balance Verification
+
+Properties of the 14-match base schedule:
+
+- All **28** possible teammate pairs (C(8,2)) appear **exactly once**
+- All **14** possible pair-vs-pair matchups appear **exactly once**
+- Every player plays **exactly 7 matches** (one per round)
+
+For longer seasons (28/42), the base schedule is repeated, maintaining proportional balance.
+
+#### Player Pool
+
+Each Wednesday season can use any 8 players selected from the pool. The default pool is:
+Jakub, Joe, Matt, Charlie, Jon, Izra, Dan, Caleb — with the option to add new players at season creation time.
 
 ## License
 

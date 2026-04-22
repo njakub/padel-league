@@ -1,44 +1,47 @@
 /**
  * Scoring and points calculation module for Padel League Tracker
  *
- * Scoring rules:
- * - Matches are "first to 4 games"
- * - Valid scores: 4-0, 4-1, 4-2, 4-3 (winner always has 4)
- * - Points per player per match:
- *   - 1 point per game their team won
- *   - PLUS 1 bonus point if their team won the match
+ * Two scoring styles:
  *
- * Examples:
- * - 4-0: winners get 5 points each (4 + 1 bonus), losers get 0
- * - 4-2: winners get 5 points each (4 + 1 bonus), losers get 2
- * - 4-3: winners get 5 points each (4 + 1 bonus), losers get 3
+ * "standard" (Sunday / Adhoc league):
+ *   - Matches are "first to 4 games"
+ *   - Valid scores: 4-0, 4-1, 4-2, 4-3 (winner always has 4)
+ *   - Points per player: games their team won + 1 win bonus
+ *
+ * "americano" (Wednesday league):
+ *   - Teams play until total points = 32
+ *   - Valid scores: any A + B = 32 (e.g. 20-12, 16-16)
+ *   - Points per player: exactly the points their team scored (no bonus)
+ *   - 16-16 is a draw — counts as neither win nor loss
  */
+
+export type ScoringStyle = "standard" | "americano";
 
 export interface MatchResult {
   teamAGames: number;
   teamBGames: number;
-  winnerTeam: "A" | "B";
+  winnerTeam: "A" | "B" | "DRAW";
 }
 
 /**
  * Validate a match score
- * Returns true if valid, false otherwise
  */
-export function validateScore(teamAGames: number, teamBGames: number): boolean {
-  // One team must have exactly 4
-  if (teamAGames !== 4 && teamBGames !== 4) {
-    return false;
+export function validateScore(
+  teamAGames: number,
+  teamBGames: number,
+  style: ScoringStyle = "standard",
+): boolean {
+  if (!Number.isInteger(teamAGames) || !Number.isInteger(teamBGames)) return false;
+  if (teamAGames < 0 || teamBGames < 0) return false;
+
+  if (style === "americano") {
+    return teamAGames + teamBGames === 32;
   }
 
-  // The other team must have 0-3
-  if (teamAGames === 4) {
-    return teamBGames >= 0 && teamBGames <= 3;
-  }
-
-  if (teamBGames === 4) {
-    return teamAGames >= 0 && teamAGames <= 3;
-  }
-
+  // standard: one team must have exactly 4, other 0-3
+  if (teamAGames !== 4 && teamBGames !== 4) return false;
+  if (teamAGames === 4) return teamBGames >= 0 && teamBGames <= 3;
+  if (teamBGames === 4) return teamAGames >= 0 && teamAGames <= 3;
   return false;
 }
 
@@ -49,38 +52,37 @@ export function validateScore(teamAGames: number, teamBGames: number): boolean {
 export function parseMatchResult(
   teamAGames: number,
   teamBGames: number,
+  style: ScoringStyle = "standard",
 ): MatchResult | null {
-  if (!validateScore(teamAGames, teamBGames)) {
-    return null;
-  }
+  if (!validateScore(teamAGames, teamBGames, style)) return null;
 
-  const winnerTeam = teamAGames === 4 ? "A" : "B";
+  let winnerTeam: "A" | "B" | "DRAW";
+  if (teamAGames > teamBGames) winnerTeam = "A";
+  else if (teamBGames > teamAGames) winnerTeam = "B";
+  else winnerTeam = "DRAW";
 
-  return {
-    teamAGames,
-    teamBGames,
-    winnerTeam,
-  };
+  return { teamAGames, teamBGames, winnerTeam };
 }
 
 /**
  * Calculate points for a single player in a match
- * @param gamesWonByTeam Number of games won by the player's team
- * @param didTeamWin Whether the player's team won the match
- * @returns Points earned by the player
  */
 export function calculatePlayerPoints(
   gamesWonByTeam: number,
   didTeamWin: boolean,
+  style: ScoringStyle = "standard",
 ): number {
-  const winBonus = didTeamWin ? 1 : 0;
-  return gamesWonByTeam + winBonus;
+  if (style === "americano") return gamesWonByTeam; // points = score, no bonus
+  return gamesWonByTeam + (didTeamWin ? 1 : 0);
 }
 
 /**
  * Calculate points for all players in a match
  */
-export function calculateMatchPoints(result: MatchResult): {
+export function calculateMatchPoints(
+  result: MatchResult,
+  style: ScoringStyle = "standard",
+): {
   teamAPointsPerPlayer: number;
   teamBPointsPerPlayer: number;
 } {
@@ -88,8 +90,8 @@ export function calculateMatchPoints(result: MatchResult): {
   const teamBWon = result.winnerTeam === "B";
 
   return {
-    teamAPointsPerPlayer: calculatePlayerPoints(result.teamAGames, teamAWon),
-    teamBPointsPerPlayer: calculatePlayerPoints(result.teamBGames, teamBWon),
+    teamAPointsPerPlayer: calculatePlayerPoints(result.teamAGames, teamAWon, style),
+    teamBPointsPerPlayer: calculatePlayerPoints(result.teamBGames, teamBWon, style),
   };
 }
 
@@ -120,11 +122,13 @@ export interface MatchWithPlayers {
  * Calculate standings from a list of matches
  * @param matches Array of matches with results
  * @param players Map of player ID to player name
+ * @param style Scoring style — 'standard' (first to 4) or 'americano' (sum to 32)
  * @returns Array of player stats sorted by points (descending)
  */
 export function calculateStandings(
   matches: MatchWithPlayers[],
   players: Map<number, string>,
+  style: ScoringStyle = "standard",
 ): PlayerStats[] {
   const stats = new Map<number, PlayerStats>();
 
@@ -153,11 +157,12 @@ export function calculateStandings(
       continue;
     }
 
-    const result = parseMatchResult(match.teamAGames, match.teamBGames);
+    const result = parseMatchResult(match.teamAGames, match.teamBGames, style);
     if (!result) continue;
 
-    const matchPoints = calculateMatchPoints(result);
+    const matchPoints = calculateMatchPoints(result, style);
     const teamAWon = result.winnerTeam === "A";
+    const teamBWon = result.winnerTeam === "B";
 
     // Update Team A players
     const teamAPlayers = [match.teamAPlayer1Id, match.teamAPlayer2Id];
@@ -168,11 +173,9 @@ export function calculateStandings(
       playerStats.gamesAgainst += result.teamBGames;
       playerStats.points += matchPoints.teamAPointsPerPlayer;
 
-      if (teamAWon) {
-        playerStats.wins++;
-      } else {
-        playerStats.losses++;
-      }
+      if (teamAWon) playerStats.wins++;
+      else if (teamBWon) playerStats.losses++;
+      // DRAW: neither win nor loss
     }
 
     // Update Team B players
@@ -184,11 +187,9 @@ export function calculateStandings(
       playerStats.gamesAgainst += result.teamAGames;
       playerStats.points += matchPoints.teamBPointsPerPlayer;
 
-      if (!teamAWon) {
-        playerStats.wins++;
-      } else {
-        playerStats.losses++;
-      }
+      if (teamBWon) playerStats.wins++;
+      else if (teamAWon) playerStats.losses++;
+      // DRAW: neither win nor loss
     }
   }
 
@@ -220,6 +221,7 @@ export interface PairingStats {
 export function calculatePairingStats(
   matches: MatchWithPlayers[],
   players: Map<number, string>,
+  style: ScoringStyle = "standard",
 ): PairingStats[] {
   const stats = new Map<string, PairingStats>();
 
@@ -234,24 +236,27 @@ export function calculatePairingStats(
       continue;
 
     const teamAWon = match.winnerTeam === "A";
+    const teamBWon = match.winnerTeam === "B";
     const teams = [
       {
         p1: match.teamAPlayer1Id,
         p2: match.teamAPlayer2Id,
         won: teamAWon,
+        lost: teamBWon,
         gf: match.teamAGames,
         ga: match.teamBGames,
       },
       {
         p1: match.teamBPlayer1Id,
         p2: match.teamBPlayer2Id,
-        won: !teamAWon,
+        won: teamBWon,
+        lost: teamAWon,
         gf: match.teamBGames,
         ga: match.teamAGames,
       },
     ];
 
-    for (const { p1, p2, won, gf, ga } of teams) {
+    for (const { p1, p2, won, lost, gf, ga } of teams) {
       const key = pairKey(p1, p2);
       if (!stats.has(key)) {
         const [lo, hi] = p1 < p2 ? [p1, p2] : [p2, p1];
@@ -273,7 +278,8 @@ export function calculatePairingStats(
       s.gamesFor += gf;
       s.gamesAgainst += ga;
       if (won) s.wins++;
-      else s.losses++;
+      else if (lost) s.losses++;
+      // DRAW: neither win nor loss
     }
   }
 

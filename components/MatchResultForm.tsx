@@ -17,12 +17,15 @@ interface Match {
 interface MatchResultFormProps {
   match: Match;
   isEdit?: boolean;
+  leagueType?: string;
 }
 
 export default function MatchResultForm({
   match,
   isEdit = false,
+  leagueType,
 }: MatchResultFormProps) {
+  const isAmericano = leagueType === "WEDNESDAY";
   const [isOpen, setIsOpen] = useState(false);
   const [teamAGames, setTeamAGames] = useState(
     match.teamAGames?.toString() || "",
@@ -87,6 +90,12 @@ export default function MatchResultForm({
     }
   };
 
+  const teamAVal = parseInt(teamAGames);
+  const teamBVal = parseInt(teamBGames);
+  const bothEntered = !isNaN(teamAVal) && !isNaN(teamBVal);
+  const runningTotal = bothEntered ? teamAVal + teamBVal : null;
+  const totalMismatch = isAmericano && runningTotal !== null && runningTotal !== 32;
+
   return (
     <>
       <button
@@ -116,11 +125,19 @@ export default function MatchResultForm({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="bg-blue-50 p-4 rounded-md text-sm text-gray-700">
                 <p className="font-semibold mb-1">Scoring Rules:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>First to 4 games wins</li>
-                  <li>Valid scores: 4-0, 4-1, 4-2, 4-3</li>
-                  <li>One team must have exactly 4, the other 0-3</li>
-                </ul>
+                {isAmericano ? (
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>Americano — scores must total 32</li>
+                    <li>Examples: 20-12, 24-8, 16-16</li>
+                    <li>16-16 counts as a draw</li>
+                  </ul>
+                ) : (
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>First to 4 games wins</li>
+                    <li>Valid scores: 4-0, 4-1, 4-2, 4-3</li>
+                    <li>One team must have exactly 4, the other 0-3</li>
+                  </ul>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -138,7 +155,7 @@ export default function MatchResultForm({
                     id="teamAGames"
                     type="number"
                     min="0"
-                    max="4"
+                    max={isAmericano ? "32" : "4"}
                     value={teamAGames}
                     onChange={(e) => setTeamAGames(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl font-bold"
@@ -161,7 +178,7 @@ export default function MatchResultForm({
                     id="teamBGames"
                     type="number"
                     min="0"
-                    max="4"
+                    max={isAmericano ? "32" : "4"}
                     value={teamBGames}
                     onChange={(e) => setTeamBGames(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl font-bold"
@@ -170,6 +187,19 @@ export default function MatchResultForm({
                   />
                 </div>
               </div>
+
+              {isAmericano && bothEntered && (
+                <div
+                  className={`text-center text-sm font-medium py-1 rounded ${
+                    totalMismatch
+                      ? "text-red-600 bg-red-50"
+                      : "text-green-700 bg-green-50"
+                  }`}
+                >
+                  Total: {runningTotal} / 32
+                  {!totalMismatch && " ✓"}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button

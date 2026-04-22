@@ -21,12 +21,14 @@ interface MatchListWithTabsProps {
   matches: Match[];
   seasonStatus: string;
   isAdhoc?: boolean;
+  leagueType?: string;
 }
 
 export default function MatchListWithTabs({
   matches,
   seasonStatus,
   isAdhoc = false,
+  leagueType,
 }: MatchListWithTabsProps) {
   const [activeTab, setActiveTab] = useState<"pending" | "completed">(
     "pending",
@@ -270,7 +272,13 @@ export default function MatchListWithTabs({
               <div className="flex items-center gap-2 text-sm">
                 {/* Team A */}
                 <div
-                  className={`flex-1 p-2 rounded text-center ${match.winnerTeam === "A" ? "bg-green-100 font-semibold" : ""}`}
+                  className={`flex-1 p-2 rounded text-center ${
+                    match.winnerTeam === "A"
+                      ? "bg-green-100 font-semibold"
+                      : match.winnerTeam === "DRAW"
+                        ? "bg-yellow-50 font-semibold"
+                        : ""
+                  }`}
                 >
                   <div className="text-xs text-gray-600">Team A</div>
                   <div className="font-medium text-gray-900">
@@ -286,15 +294,25 @@ export default function MatchListWithTabs({
                 {/* VS or Action */}
                 <div className="flex-shrink-0">
                   {match.winnerTeam ? (
-                    <div className="text-gray-400 text-xs">vs</div>
+                    <div className={`text-xs font-medium ${
+                      match.winnerTeam === "DRAW" ? "text-yellow-600" : "text-gray-400"
+                    }`}>
+                      {match.winnerTeam === "DRAW" ? "DRAW" : "vs"}
+                    </div>
                   ) : (
-                    <MatchResultForm match={match} />
+                    <MatchResultForm match={match} leagueType={leagueType} />
                   )}
                 </div>
 
                 {/* Team B */}
                 <div
-                  className={`flex-1 p-2 rounded text-center ${match.winnerTeam === "B" ? "bg-green-100 font-semibold" : ""}`}
+                  className={`flex-1 p-2 rounded text-center ${
+                    match.winnerTeam === "B"
+                      ? "bg-green-100 font-semibold"
+                      : match.winnerTeam === "DRAW"
+                        ? "bg-yellow-50 font-semibold"
+                        : ""
+                  }`}
                 >
                   <div className="text-xs text-gray-600">Team B</div>
                   <div className="font-medium text-gray-900">
@@ -311,7 +329,7 @@ export default function MatchListWithTabs({
               {/* Edit / Remove row for completed matches */}
               {match.winnerTeam && seasonStatus === "ACTIVE" && (
                 <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end gap-2">
-                  <MatchResultForm match={match} isEdit />
+                  <MatchResultForm match={match} isEdit leagueType={leagueType} />
                   {isAdhoc && <DeleteAdhocMatchButton matchId={match.id} />}
                 </div>
               )}

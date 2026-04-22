@@ -68,7 +68,7 @@ export default function AddPlayerButton() {
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               The player will be available for Adhoc sessions immediately. Add
-              them to a Sunday or Wednesday league when creating the next season.
+              them to a Sunday or Americano Pairs league when creating the next season.
             </p>
 
             {error && (

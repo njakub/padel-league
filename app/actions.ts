@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { generateSchedule, mapToPlayerIds } from "@/lib/schedule-generator";
-import { generateSchedule4, mapToPlayerIds4 } from "@/lib/schedule-generator-4";
-import { parseMatchResult } from "@/lib/scoring";
+import { generateSchedulePairs, mapToPlayerIdsPairs } from "@/lib/schedule-generator-pairs";
+import { parseMatchResult, ScoringStyle } from "@/lib/scoring";
 
 /**
  * Create a new season with generated schedule
@@ -93,14 +93,25 @@ export async function recordMatchResult(
   teamBGames: number,
 ) {
   try {
+    // Fetch match with season to determine scoring style
+    const matchWithSeason = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { season: true },
+    });
+    if (!matchWithSeason) {
+      return { success: false, error: "Match not found." };
+    }
+    const style: ScoringStyle =
+      matchWithSeason.season.leagueType === "WEDNESDAY" ? "americano" : "standard";
+
     // Validate score
-    const result = parseMatchResult(teamAGames, teamBGames);
+    const result = parseMatchResult(teamAGames, teamBGames, style);
     if (!result) {
-      return {
-        success: false,
-        error:
-          "Invalid score. One team must have exactly 4 games, the other 0-3.",
-      };
+      const hint =
+        style === "americano"
+          ? "Invalid score. Scores must total 32 (e.g. 20-12, 16-16)."
+          : "Invalid score. One team must have exactly 4 games, the other 0-3.";
+      return { success: false, error: hint };
     }
 
     // Update match
@@ -243,12 +254,19 @@ export async function deleteSeason(seasonId: number) {
 }
 
 /**
- * Create a new Wednesday League season (4 players: Jakub, Joe, Matt, Charlie)
+ * Create a new Wednesday League season (8 players, 2 courts, no sit-outs)
  */
 export async function createWednesdaySeason(
-  totalMatches: 12 | 24 | 36,
+  totalMatches: 6 | 12 | 18 | 24,
+  // 4 fixed pairs: each pair is [player1Id, player2Id]
+  pairs: [[number, number], [number, number], [number, number], [number, number]],
   name?: string,
 ) {
+  const allPlayerIds = pairs.flat();
+  if (new Set(allPlayerIds).size !== 8) {
+    return { success: false, error: "All 8 players across the 4 pairs must be different." };
+  }
+
   try {
     // Check if there's already an active Wednesday season
     const existingActive = await prisma.season.findFirst({
@@ -259,36 +277,33 @@ export async function createWednesdaySeason(
       return {
         success: false,
         error:
-          "There is already an active Wednesday League season. Please complete it first.",
+          "There is already an active Americano Pairs season. Please complete it first.",
       };
     }
 
-    // Get Wednesday League players (Jakub, Joe, Matt, Charlie — no Jon)
+    // Verify all players exist
     const players = await prisma.player.findMany({
-      where: { name: { in: ["Jakub", "Joe", "Matt", "Charlie"] } },
-      orderBy: { id: "asc" },
+      where: { id: { in: allPlayerIds } },
     });
 
-    if (players.length !== 4) {
+    if (players.length !== 8) {
       return {
         success: false,
-        error:
-          "System requires exactly 4 Wednesday League players to be configured.",
+        error: "One or more selected players could not be found.",
       };
     }
 
-    // Generate schedule
-    const schedule = generateSchedule4(totalMatches);
-    const playerIds = players.map((p) => p.id);
-    const matchesData = mapToPlayerIds4(schedule, playerIds);
+    // Generate schedule with fixed pairs
+    const schedule = generateSchedulePairs(totalMatches);
+    const matchesData = mapToPlayerIdsPairs(schedule, pairs);
 
     // Count existing Wednesday seasons to generate default name
     const seasonCount = await prisma.season.count({
       where: { leagueType: "WEDNESDAY" },
     });
-    const seasonName = name || `Wednesday Season ${seasonCount + 1}`;
+    const seasonName = name || `Americano Season ${seasonCount + 1}`;
 
-    // Create season with matches (no sitOutPlayerId for 4-player format)
+    // Create season with matches (no sitOutPlayerId — no one sits out)
     const season = await prisma.season.create({
       data: {
         name: seasonName,
@@ -313,7 +328,7 @@ export async function createWednesdaySeason(
     console.error("Error creating Wednesday season:", error);
     return {
       success: false,
-      error: "Failed to create Wednesday League season. Please try again.",
+      error: "Failed to create Americano Pairs season. Please try again.",
     };
   }
 }

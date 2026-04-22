@@ -309,3 +309,132 @@ describe("Scoring", () => {
     });
   });
 });
+
+describe("Americano scoring", () => {
+  describe("validateScore (americano)", () => {
+    it("should accept scores that sum to 32", () => {
+      expect(validateScore(20, 12, "americano")).toBe(true);
+      expect(validateScore(16, 16, "americano")).toBe(true);
+      expect(validateScore(32, 0, "americano")).toBe(true);
+      expect(validateScore(0, 32, "americano")).toBe(true);
+      expect(validateScore(17, 15, "americano")).toBe(true);
+    });
+
+    it("should reject scores that do not sum to 32", () => {
+      expect(validateScore(4, 0, "americano")).toBe(false);
+      expect(validateScore(20, 11, "americano")).toBe(false);
+      expect(validateScore(0, 0, "americano")).toBe(false);
+    });
+
+    it("should reject negative scores", () => {
+      expect(validateScore(-1, 33, "americano")).toBe(false);
+    });
+  });
+
+  describe("parseMatchResult (americano)", () => {
+    it("should return winner A when A > B and sum is 32", () => {
+      const result = parseMatchResult(20, 12, "americano");
+      expect(result).toEqual({ teamAGames: 20, teamBGames: 12, winnerTeam: "A" });
+    });
+
+    it("should return winner B when B > A and sum is 32", () => {
+      const result = parseMatchResult(8, 24, "americano");
+      expect(result).toEqual({ teamAGames: 8, teamBGames: 24, winnerTeam: "B" });
+    });
+
+    it("should return DRAW when scores are equal (16-16)", () => {
+      const result = parseMatchResult(16, 16, "americano");
+      expect(result).toEqual({ teamAGames: 16, teamBGames: 16, winnerTeam: "DRAW" });
+    });
+
+    it("should return null for invalid americano scores", () => {
+      expect(parseMatchResult(4, 2, "americano")).toBeNull();
+      expect(parseMatchResult(20, 11, "americano")).toBeNull();
+    });
+  });
+
+  describe("calculatePlayerPoints (americano)", () => {
+    it("should return exactly the games scored, no win bonus", () => {
+      expect(calculatePlayerPoints(20, true, "americano")).toBe(20);
+      expect(calculatePlayerPoints(12, false, "americano")).toBe(12);
+      expect(calculatePlayerPoints(16, true, "americano")).toBe(16);
+      expect(calculatePlayerPoints(16, false, "americano")).toBe(16);
+    });
+  });
+
+  describe("calculateMatchPoints (americano)", () => {
+    it("should assign scores directly for a 20-12 match", () => {
+      const result = { teamAGames: 20, teamBGames: 12, winnerTeam: "A" as const };
+      const points = calculateMatchPoints(result, "americano");
+      expect(points.teamAPointsPerPlayer).toBe(20);
+      expect(points.teamBPointsPerPlayer).toBe(12);
+    });
+
+    it("should assign 16 each for a 16-16 draw", () => {
+      const result = { teamAGames: 16, teamBGames: 16, winnerTeam: "DRAW" as const };
+      const points = calculateMatchPoints(result, "americano");
+      expect(points.teamAPointsPerPlayer).toBe(16);
+      expect(points.teamBPointsPerPlayer).toBe(16);
+    });
+  });
+
+  describe("calculateStandings (americano)", () => {
+    const players = new Map([
+      [1, "Alice"],
+      [2, "Bob"],
+      [3, "Charlie"],
+      [4, "Dan"],
+    ]);
+
+    function makeMatch(
+      id: number,
+      a1: number,
+      a2: number,
+      b1: number,
+      b2: number,
+      aGames: number,
+      bGames: number,
+      winner: string,
+    ): MatchWithPlayers {
+      return {
+        id,
+        teamAPlayer1Id: a1,
+        teamAPlayer2Id: a2,
+        teamBPlayer1Id: b1,
+        teamBPlayer2Id: b2,
+        sitOutPlayerId: null,
+        teamAGames: aGames,
+        teamBGames: bGames,
+        winnerTeam: winner,
+      };
+    }
+
+    it("should accumulate scores without win bonus", () => {
+      const matches = [
+        makeMatch(1, 1, 2, 3, 4, 20, 12, "A"),
+      ];
+      const standings = calculateStandings(matches, players, "americano");
+      const alice = standings.find((s) => s.playerId === 1)!;
+      const charlie = standings.find((s) => s.playerId === 3)!;
+      expect(alice.points).toBe(20);
+      expect(charlie.points).toBe(12);
+      expect(alice.wins).toBe(1);
+      expect(charlie.losses).toBe(1);
+    });
+
+    it("should record neither win nor loss for draws", () => {
+      const matches = [
+        makeMatch(1, 1, 2, 3, 4, 16, 16, "DRAW"),
+      ];
+      const standings = calculateStandings(matches, players, "americano");
+      const alice = standings.find((s) => s.playerId === 1)!;
+      const charlie = standings.find((s) => s.playerId === 3)!;
+      expect(alice.points).toBe(16);
+      expect(charlie.points).toBe(16);
+      expect(alice.wins).toBe(0);
+      expect(alice.losses).toBe(0);
+      expect(charlie.wins).toBe(0);
+      expect(charlie.losses).toBe(0);
+    });
+  });
+});

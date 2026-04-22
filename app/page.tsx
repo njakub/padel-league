@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
 import LeagueTabs, {
   type LeagueData,
+  type WednesdayLeagueData,
   type AdhocLeagueData,
   type ActiveSeasonInfo,
   type CompletedSeasonInfo,
@@ -20,35 +21,25 @@ const matchInclude = {
   },
 };
 
-async function buildLeagueData(
-  leagueType: "SUNDAY" | "WEDNESDAY",
-): Promise<LeagueData> {
+async function buildSundayData(): Promise<LeagueData> {
   const [activeSeason, completedSeasons, players] = await Promise.all([
     prisma.season.findFirst({
-      where: { status: "ACTIVE", leagueType },
+      where: { status: "ACTIVE", leagueType: "SUNDAY" },
       include: matchInclude,
     }),
     prisma.season.findMany({
-      where: { status: "COMPLETED", leagueType },
+      where: { status: "COMPLETED", leagueType: "SUNDAY" },
       include: matchInclude,
       orderBy: { createdAt: "desc" },
     }),
     prisma.player.findMany({ orderBy: { id: "asc" } }),
   ]);
 
-  // Build a player map scoped to this league's roster
-  const leaguePlayers =
-    leagueType === "SUNDAY"
-      ? players.filter((p) =>
-          ["Jakub", "Joe", "Jon", "Matt", "Charlie"].includes(p.name),
-        )
-      : players.filter((p) =>
-          ["Jakub", "Joe", "Matt", "Charlie"].includes(p.name),
-        );
-
+  const leaguePlayers = players.filter((p) =>
+    ["Jakub", "Joe", "Jon", "Matt", "Charlie"].includes(p.name),
+  );
   const playerMap = new Map(leaguePlayers.map((p) => [p.id, p.name]));
 
-  // Active season
   let activeSeasonInfo: ActiveSeasonInfo | null = null;
   if (activeSeason) {
     const standings = calculateStandings(
@@ -72,7 +63,6 @@ async function buildLeagueData(
     };
   }
 
-  // Completed seasons
   const completedSeasonsInfo: CompletedSeasonInfo[] = completedSeasons.map(
     (s) => ({
       id: s.id,
@@ -83,7 +73,6 @@ async function buildLeagueData(
     }),
   );
 
-  // Overall league tally across all completed seasons
   const allCompletedMatches = completedSeasons.flatMap((s) => s.matches);
   const leagueTally = calculateStandings(
     allCompletedMatches as Parameters<typeof calculateStandings>[0],
@@ -99,6 +88,79 @@ async function buildLeagueData(
     completedSeasons: completedSeasonsInfo,
     leagueTally,
     leaguePairings,
+  };
+}
+
+async function buildWednesdayData(): Promise<WednesdayLeagueData> {
+  const [activeSeason, completedSeasons, allPlayers] = await Promise.all([
+    prisma.season.findFirst({
+      where: { status: "ACTIVE", leagueType: "WEDNESDAY" },
+      include: matchInclude,
+    }),
+    prisma.season.findMany({
+      where: { status: "COMPLETED", leagueType: "WEDNESDAY" },
+      include: matchInclude,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.player.findMany({ orderBy: { id: "asc" } }),
+  ]);
+
+  // Use all players as the map so any 8-player combination is supported
+  const playerMap = new Map(allPlayers.map((p) => [p.id, p.name]));
+
+  let activeSeasonInfo: ActiveSeasonInfo | null = null;
+  if (activeSeason) {
+    const standings = calculateStandings(
+      activeSeason.matches as Parameters<typeof calculateStandings>[0],
+      playerMap,
+      "americano",
+    );
+    const pairings = calculatePairingStats(
+      activeSeason.matches as Parameters<typeof calculatePairingStats>[0],
+      playerMap,
+      "americano",
+    );
+    const completedCount = activeSeason.matches.filter(
+      (m) => m.winnerTeam !== null,
+    ).length;
+    activeSeasonInfo = {
+      id: activeSeason.id,
+      name: activeSeason.name,
+      totalMatches: activeSeason.totalMatches,
+      completedCount,
+      standings,
+      pairings,
+    };
+  }
+
+  const completedSeasonsInfo: CompletedSeasonInfo[] = completedSeasons.map(
+    (s) => ({
+      id: s.id,
+      name: s.name,
+      totalMatches: s.totalMatches,
+      createdAt: s.createdAt.toISOString(),
+      completedCount: s.matches.filter((m) => m.winnerTeam !== null).length,
+    }),
+  );
+
+  const allCompletedMatches = completedSeasons.flatMap((s) => s.matches);
+  const leagueTally = calculateStandings(
+    allCompletedMatches as Parameters<typeof calculateStandings>[0],
+    playerMap,
+    "americano",
+  );
+  const leaguePairings = calculatePairingStats(
+    allCompletedMatches as Parameters<typeof calculatePairingStats>[0],
+    playerMap,
+    "americano",
+  );
+
+  return {
+    activeSeason: activeSeasonInfo,
+    completedSeasons: completedSeasonsInfo,
+    leagueTally,
+    leaguePairings,
+    allPlayers: allPlayers.map((p) => ({ id: p.id, name: p.name })),
   };
 }
 
@@ -172,8 +234,8 @@ async function buildAdhocData(): Promise<AdhocLeagueData> {
 
 export default async function HomePage() {
   const [sunday, wednesday, adhoc] = await Promise.all([
-    buildLeagueData("SUNDAY"),
-    buildLeagueData("WEDNESDAY"),
+    buildSundayData(),
+    buildWednesdayData(),
     buildAdhocData(),
   ]);
 

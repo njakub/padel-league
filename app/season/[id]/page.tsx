@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
+import { calculateStandings, calculatePairingStats, ScoringStyle } from "@/lib/scoring";
 import CompleteSeasonButton from "@/components/CompleteSeasonButton";
 import DeleteSeasonButton from "@/components/DeleteSeasonButton";
 import MatchListWithTabs from "@/components/MatchListWithTabs";
@@ -52,24 +52,21 @@ export default async function SeasonPage({
     notFound();
   }
 
-  // Scope standings to the league's roster so non-participating players are excluded
+  // For all league types, build the player map from everyone who appears in matches
+  // (avoids hardcoded rosters) — unused players simply won't appear in standings
   const isWednesday = season.leagueType === "WEDNESDAY";
   const isAdhoc = season.leagueType === "ADHOC";
-  // For adhoc, use all players as the map (any player can appear)
-  const leaguePlayers = isWednesday
-    ? players.filter((p) =>
-        ["Jakub", "Joe", "Matt", "Charlie"].includes(p.name),
-      )
-    : players;
-
-  const playerMap = new Map(leaguePlayers.map((p) => [p.id, p.name]));
+  const scoringStyle: ScoringStyle = isWednesday ? "americano" : "standard";
+  const playerMap = new Map(players.map((p) => [p.id, p.name]));
   const standings = calculateStandings(
     season.matches as Parameters<typeof calculateStandings>[0],
     playerMap,
+    scoringStyle,
   );
   const pairings = calculatePairingStats(
     season.matches as Parameters<typeof calculatePairingStats>[0],
     playerMap,
+    scoringStyle,
   );
 
   const completedMatches = season.matches.filter((m) => m.winnerTeam !== null);
@@ -79,8 +76,11 @@ export default async function SeasonPage({
   };
 
   // Adhoc sessions can always be completed; others need all matches played
-  const canComplete = season.status === "ACTIVE" &&
-    (isAdhoc ? season.matches.length > 0 : progress.completed === progress.total);
+  const canComplete =
+    season.status === "ACTIVE" &&
+    (isAdhoc
+      ? season.matches.length > 0
+      : progress.completed === progress.total);
 
   return (
     <div className="space-y-6">
@@ -107,7 +107,7 @@ export default async function SeasonPage({
               {isAdhoc
                 ? "🎲 Adhoc Session"
                 : isWednesday
-                  ? "🌙 Wednesday League"
+                  ? "� Americano Pairs"
                   : "☀️ Sunday League"}
             </span>
             <span
@@ -239,6 +239,7 @@ export default async function SeasonPage({
         matches={season.matches}
         seasonStatus={season.status}
         isAdhoc={isAdhoc}
+        leagueType={season.leagueType}
       />
 
       {/* Delete Season - Bottom of page */}

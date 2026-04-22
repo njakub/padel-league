@@ -3,8 +3,17 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create the 5 players
-  const players = ["Jakub", "Joe", "Jon", "Matt", "Charlie"];
+  // All players across Sunday and Wednesday leagues
+  const players = [
+    "Jakub",
+    "Joe",
+    "Jon",
+    "Matt",
+    "Charlie",
+    "Izra",
+    "Dan",
+    "Caleb",
+  ];
 
   console.log("Seeding database...");
 

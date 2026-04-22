@@ -41,9 +41,12 @@ export interface AdhocLeagueData {
   allPlayers: { id: number; name: string }[];
 }
 
+// Wednesday uses the same shape as AdhocLeagueData (needs allPlayers for season creation)
+export type WednesdayLeagueData = AdhocLeagueData;
+
 interface LeagueTabsProps {
   sunday: LeagueData;
-  wednesday: LeagueData;
+  wednesday: WednesdayLeagueData;
   adhoc: AdhocLeagueData;
 }
 
@@ -110,17 +113,18 @@ function LeagueView({
   data,
   isSunday,
 }: {
-  data: LeagueData;
+  data: LeagueData | WednesdayLeagueData;
   isSunday: boolean;
 }) {
+  const allPlayers = "allPlayers" in data ? data.allPlayers : [];
   const accentColor = isSunday ? "blue" : "purple";
   const noSeasonBg = isSunday
     ? "bg-blue-50 border-blue-200"
     : "bg-purple-50 border-purple-200";
-  const leagueLabel = isSunday ? "Sunday League" : "Wednesday League";
+  const leagueLabel = isSunday ? "Sunday League" : "Americano Pairs";
   const playersList = isSunday
     ? "Jakub · Joe · Jon · Matt · Charlie"
-    : "Jakub · Joe · Matt · Charlie";
+    : "8 players per season · 2 courts · no sit-outs";
 
   return (
     <div className="space-y-8">
@@ -178,7 +182,11 @@ function LeagueView({
           <p className="text-gray-600 mb-6">
             Create a new {leagueLabel} season to start tracking matches.
           </p>
-          {isSunday ? <CreateSeasonButton /> : <CreateWednesdaySeasonButton />}
+          {isSunday ? (
+            <CreateSeasonButton />
+          ) : (
+            <CreateWednesdaySeasonButton players={allPlayers} />
+          )}
         </div>
       )}
 
@@ -220,7 +228,9 @@ function LeagueView({
                     </h3>
                     <p className="text-sm text-gray-600">
                       {season.completedCount}
-                      {season.totalMatches ? ` / ${season.totalMatches}` : ""}{" "}
+                      {season.totalMatches
+                        ? ` / ${season.totalMatches}`
+                        : ""}{" "}
                       matches &bull;{" "}
                       {new Date(season.createdAt).toLocaleDateString()}
                     </p>
@@ -297,7 +307,9 @@ function AdhocLeagueView({ data }: { data: AdhocLeagueData }) {
           <h2 className="text-xl font-semibold text-gray-900 mb-1">
             No Active Session
           </h2>
-          <p className="text-sm text-gray-500 mb-2">Any players · No fixed schedule</p>
+          <p className="text-sm text-gray-500 mb-2">
+            Any players · No fixed schedule
+          </p>
           <p className="text-gray-600 mb-6">
             Start an adhoc session and add matches on the fly with any 4
             players.
@@ -419,9 +431,9 @@ export default function LeagueTabs({
           }`}
         >
           <div className="flex items-center justify-center gap-1 sm:gap-2">
-            <span>🌙</span>
-            <span className="hidden sm:inline">Wednesday League</span>
-            <span className="sm:hidden">Wed</span>
+            <span>�</span>
+            <span className="hidden sm:inline">Americano Pairs</span>
+            <span className="sm:hidden">Americano</span>
             {wednesdayHasActive && (
               <span
                 className="w-2 h-2 rounded-full bg-green-500 inline-block"
@@ -430,7 +442,7 @@ export default function LeagueTabs({
             )}
           </div>
           <div className="hidden sm:block text-xs font-normal text-gray-500 mt-0.5">
-            4 players
+            8 players
           </div>
         </button>
         <button
