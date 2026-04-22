@@ -114,7 +114,7 @@ async function buildWednesdayData(): Promise<WednesdayLeagueData> {
       activeSeason.matches as Parameters<typeof calculateStandings>[0],
       playerMap,
       "americano",
-    );
+    ).filter((s) => s.matchesPlayed > 0);
     const pairings = calculatePairingStats(
       activeSeason.matches as Parameters<typeof calculatePairingStats>[0],
       playerMap,
@@ -148,7 +148,7 @@ async function buildWednesdayData(): Promise<WednesdayLeagueData> {
     allCompletedMatches as Parameters<typeof calculateStandings>[0],
     playerMap,
     "americano",
-  );
+  ).filter((s) => s.matchesPlayed > 0);
   const leaguePairings = calculatePairingStats(
     allCompletedMatches as Parameters<typeof calculatePairingStats>[0],
     playerMap,

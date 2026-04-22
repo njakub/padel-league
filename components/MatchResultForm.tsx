@@ -146,7 +146,7 @@ export default function MatchResultForm({
                     htmlFor="teamAGames"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    Team A Games
+                    {isAmericano ? "Team A Points" : "Team A Games"}
                   </label>
                   <div className="text-xs text-gray-500 mb-2">
                     ({match.teamAPlayer1.name} & {match.teamAPlayer2.name})
@@ -157,7 +157,15 @@ export default function MatchResultForm({
                     min="0"
                     max={isAmericano ? "32" : "4"}
                     value={teamAGames}
-                    onChange={(e) => setTeamAGames(e.target.value)}
+                    onChange={(e) => {
+                      setTeamAGames(e.target.value);
+                      if (isAmericano) {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 0 && val <= 32) {
+                          setTeamBGames(String(32 - val));
+                        }
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl font-bold"
                     disabled={isLoading}
                     required
@@ -169,7 +177,7 @@ export default function MatchResultForm({
                     htmlFor="teamBGames"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    Team B Games
+                    {isAmericano ? "Team B Points" : "Team B Games"}
                   </label>
                   <div className="text-xs text-gray-500 mb-2">
                     ({match.teamBPlayer1.name} & {match.teamBPlayer2.name})
@@ -180,7 +188,15 @@ export default function MatchResultForm({
                     min="0"
                     max={isAmericano ? "32" : "4"}
                     value={teamBGames}
-                    onChange={(e) => setTeamBGames(e.target.value)}
+                    onChange={(e) => {
+                      setTeamBGames(e.target.value);
+                      if (isAmericano) {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 0 && val <= 32) {
+                          setTeamAGames(String(32 - val));
+                        }
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl font-bold"
                     disabled={isLoading}
                     required

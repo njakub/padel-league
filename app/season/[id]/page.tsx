@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats, ScoringStyle } from "@/lib/scoring";
+import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
 import CompleteSeasonButton from "@/components/CompleteSeasonButton";
 import DeleteSeasonButton from "@/components/DeleteSeasonButton";
 import MatchListWithTabs from "@/components/MatchListWithTabs";
@@ -56,18 +56,51 @@ export default async function SeasonPage({
   // (avoids hardcoded rosters) — unused players simply won't appear in standings
   const isWednesday = season.leagueType === "WEDNESDAY";
   const isAdhoc = season.leagueType === "ADHOC";
-  const scoringStyle: ScoringStyle = isWednesday ? "americano" : "standard";
   const playerMap = new Map(players.map((p) => [p.id, p.name]));
   const standings = calculateStandings(
     season.matches as Parameters<typeof calculateStandings>[0],
     playerMap,
-    scoringStyle,
   );
-  const pairings = calculatePairingStats(
+  const pairingsFromStats = calculatePairingStats(
     season.matches as Parameters<typeof calculatePairingStats>[0],
     playerMap,
-    scoringStyle,
   );
+
+  // For Americano, build the full set of 4 fixed pairs from the schedule so they
+  // appear in the standings even before any scores are entered.
+  const pairings = (() => {
+    if (!isWednesday) return pairingsFromStats;
+    const statsMap = new Map(
+      pairingsFromStats.map((p) => [`${Math.min(p.player1Id, p.player2Id)}-${Math.max(p.player1Id, p.player2Id)}`, p]),
+    );
+    const seen = new Set<string>();
+    const allPairs: typeof pairingsFromStats = [];
+    for (const m of season.matches) {
+      for (const [p1, p2] of [
+        [m.teamAPlayer1, m.teamAPlayer2],
+        [m.teamBPlayer1, m.teamBPlayer2],
+      ] as [{ id: number; name: string }, { id: number; name: string }][]) {
+        const key = `${Math.min(p1.id, p2.id)}-${Math.max(p1.id, p2.id)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allPairs.push(
+          statsMap.get(key) ?? {
+            player1Id: Math.min(p1.id, p2.id),
+            player1Name: p1.id < p2.id ? p1.name : p2.name,
+            player2Id: Math.max(p1.id, p2.id),
+            player2Name: p1.id < p2.id ? p2.name : p1.name,
+            matchesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            gamesFor: 0,
+            gamesAgainst: 0,
+            winRate: 0,
+          },
+        );
+      }
+    }
+    return allPairs;
+  })();
 
   const completedMatches = season.matches.filter((m) => m.winnerTeam !== null);
   const progress = {
@@ -107,7 +140,7 @@ export default async function SeasonPage({
               {isAdhoc
                 ? "🎲 Adhoc Session"
                 : isWednesday
-                  ? "� Americano Pairs"
+                  ? "🌙 Wednesday League"
                   : "☀️ Sunday League"}
             </span>
             <span
@@ -155,71 +188,129 @@ export default async function SeasonPage({
 
       {/* Standings */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Standings</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          {isWednesday ? "Pair Standings" : "Standings"}
+        </h2>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Rank
-                </th>
-                <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Player
-                </th>
-                <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Points
-                </th>
-                <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Played
-                </th>
-                <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  W-L
-                </th>
-                <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Games For
-                </th>
-                <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Games Against
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {standings.map((stat, index) => (
-                <tr
-                  key={stat.playerId}
-                  className={index === 0 ? "bg-yellow-50" : ""}
-                >
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-900">
-                    {index + 1}
-                    {index === 0 && " 🏆"}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {stat.playerName}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm font-bold text-gray-900 text-center">
-                    {stat.points}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
-                    {stat.matchesPlayed}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
-                    {stat.wins}-{stat.losses}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
-                    {stat.gamesFor}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
-                    {stat.gamesAgainst}
-                  </td>
+          {isWednesday ? (
+            // Americano Pairs: rank pairs by total points scored (gamesFor)
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Pair
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Points
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Played
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    W-L
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {[...pairings]
+                  .sort((a, b) =>
+                    b.gamesFor !== a.gamesFor
+                      ? b.gamesFor - a.gamesFor
+                      : b.wins - a.wins,
+                  )
+                  .map((pair, index) => (
+                    <tr
+                      key={`${pair.player1Id}-${pair.player2Id}`}
+                      className={index === 0 && pair.matchesPlayed > 0 ? "bg-yellow-50" : ""}
+                    >
+                      <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-900">
+                        {index + 1}
+                        {index === 0 && pair.matchesPlayed > 0 && " 🏆"}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {pair.player1Name} &amp; {pair.player2Name}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-sm font-bold text-gray-900 text-center">
+                        {pair.gamesFor}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                        {pair.matchesPlayed}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                        {pair.wins}-{pair.losses}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Player
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Points
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Played
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    W-L
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Games For
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Games Against
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {standings.map((stat, index) => (
+                  <tr
+                    key={stat.playerId}
+                    className={index === 0 ? "bg-yellow-50" : ""}
+                  >
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-900">
+                      {index + 1}
+                      {index === 0 && " 🏆"}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {stat.playerName}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm font-bold text-gray-900 text-center">
+                      {stat.points}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                      {stat.matchesPlayed}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                      {stat.wins}-{stat.losses}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                      {stat.gamesFor}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                      {stat.gamesAgainst}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* Pairing Stats */}
-      {pairings.length > 0 && (
+      {/* Pairing Performance — Sunday/Adhoc only; Americano uses pair standings above */}
+      {!isWednesday && pairings.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-1">
             Pairing Performance
