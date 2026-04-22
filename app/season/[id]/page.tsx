@@ -71,7 +71,10 @@ export default async function SeasonPage({
   const pairings = (() => {
     if (!isWednesday) return pairingsFromStats;
     const statsMap = new Map(
-      pairingsFromStats.map((p) => [`${Math.min(p.player1Id, p.player2Id)}-${Math.max(p.player1Id, p.player2Id)}`, p]),
+      pairingsFromStats.map((p) => [
+        `${Math.min(p.player1Id, p.player2Id)}-${Math.max(p.player1Id, p.player2Id)}`,
+        p,
+      ]),
     );
     const seen = new Set<string>();
     const allPairs: typeof pairingsFromStats = [];
@@ -224,7 +227,11 @@ export default async function SeasonPage({
                   .map((pair, index) => (
                     <tr
                       key={`${pair.player1Id}-${pair.player2Id}`}
-                      className={index === 0 && pair.matchesPlayed > 0 ? "bg-yellow-50" : ""}
+                      className={
+                        index === 0 && pair.matchesPlayed > 0
+                          ? "bg-yellow-50"
+                          : ""
+                      }
                     >
                       <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-900">
                         {index + 1}

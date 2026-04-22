@@ -94,7 +94,8 @@ export default function MatchResultForm({
   const teamBVal = parseInt(teamBGames);
   const bothEntered = !isNaN(teamAVal) && !isNaN(teamBVal);
   const runningTotal = bothEntered ? teamAVal + teamBVal : null;
-  const totalMismatch = isAmericano && runningTotal !== null && runningTotal !== 32;
+  const totalMismatch =
+    isAmericano && runningTotal !== null && runningTotal !== 32;
 
   return (
     <>
