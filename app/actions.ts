@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { generateSchedule, mapToPlayerIds } from "@/lib/schedule-generator";
-import { generateSchedulePairs, mapToPlayerIdsPairs } from "@/lib/schedule-generator-pairs";
+import {
+  generateSchedulePairs,
+  mapToPlayerIdsPairs,
+} from "@/lib/schedule-generator-pairs";
 import { parseMatchResult, ScoringStyle } from "@/lib/scoring";
+import { suggestFixedPairs } from "@/lib/suggest-pairs";
 
 /**
  * Create a new season with generated schedule
@@ -102,7 +106,9 @@ export async function recordMatchResult(
       return { success: false, error: "Match not found." };
     }
     const style: ScoringStyle =
-      matchWithSeason.season.leagueType === "WEDNESDAY" ? "americano" : "standard";
+      matchWithSeason.season.leagueType === "WEDNESDAY"
+        ? "americano"
+        : "standard";
 
     // Validate score
     const result = parseMatchResult(teamAGames, teamBGames, style);
@@ -259,28 +265,23 @@ export async function deleteSeason(seasonId: number) {
 export async function createWednesdaySeason(
   totalMatches: 6 | 12 | 18 | 24,
   // 4 fixed pairs: each pair is [player1Id, player2Id]
-  pairs: [[number, number], [number, number], [number, number], [number, number]],
+  pairs: [
+    [number, number],
+    [number, number],
+    [number, number],
+    [number, number],
+  ],
   name?: string,
 ) {
   const allPlayerIds = pairs.flat();
   if (new Set(allPlayerIds).size !== 8) {
-    return { success: false, error: "All 8 players across the 4 pairs must be different." };
+    return {
+      success: false,
+      error: "All 8 players across the 4 pairs must be different.",
+    };
   }
 
   try {
-    // Check if there's already an active Wednesday season
-    const existingActive = await prisma.season.findFirst({
-      where: { status: "ACTIVE", leagueType: "WEDNESDAY" },
-    });
-
-    if (existingActive) {
-      return {
-        success: false,
-        error:
-          "There is already an active Americano Pairs season. Please complete it first.",
-      };
-    }
-
     // Verify all players exist
     const players = await prisma.player.findMany({
       where: { id: { in: allPlayerIds } },
@@ -329,6 +330,81 @@ export async function createWednesdaySeason(
     return {
       success: false,
       error: "Failed to create Americano Pairs season. Please try again.",
+    };
+  }
+}
+
+/**
+ * Suggest smart fixed pairs for a new Wednesday League season.
+ *
+ * Queries historical match data to:
+ *   1. Avoid re-pairing players who have been partners before (primary goal)
+ *   2. Balance strong players with weaker ones so every pair is competitive
+ *
+ * @param playerIds  Exactly 8 player IDs selected for the new season.
+ */
+export async function suggestWednesdayPairs(playerIds: number[]) {
+  if (playerIds.length !== 8) {
+    return {
+      success: false as const,
+      error: "Must provide exactly 8 player IDs.",
+    };
+  }
+
+  try {
+    // Fetch every WEDNESDAY match ever played (completed or not) for pairing history
+    const allMatches = await prisma.match.findMany({
+      where: { season: { leagueType: "WEDNESDAY" } },
+      select: {
+        teamAPlayer1Id: true,
+        teamAPlayer2Id: true,
+        teamBPlayer1Id: true,
+        teamBPlayer2Id: true,
+        teamAGames: true,
+        teamBGames: true,
+      },
+    });
+
+    // Build partnership-count map: how many matches each pair has played together
+    const pairingHistory = new Map<string, number>();
+    const pairKey = (a: number, b: number) =>
+      `${Math.min(a, b)}-${Math.max(a, b)}`;
+
+    for (const match of allMatches) {
+      const keyA = pairKey(match.teamAPlayer1Id, match.teamAPlayer2Id);
+      const keyB = pairKey(match.teamBPlayer1Id, match.teamBPlayer2Id);
+      pairingHistory.set(keyA, (pairingHistory.get(keyA) ?? 0) + 1);
+      pairingHistory.set(keyB, (pairingHistory.get(keyB) ?? 0) + 1);
+    }
+
+    // Compute total americano points per selected player from completed matches
+    const pointsMap = new Map<number, number>(playerIds.map((id) => [id, 0]));
+    for (const match of allMatches) {
+      if (match.teamAGames == null || match.teamBGames == null) continue;
+      for (const pid of [match.teamAPlayer1Id, match.teamAPlayer2Id]) {
+        if (pointsMap.has(pid))
+          pointsMap.set(pid, pointsMap.get(pid)! + match.teamAGames);
+      }
+      for (const pid of [match.teamBPlayer1Id, match.teamBPlayer2Id]) {
+        if (pointsMap.has(pid))
+          pointsMap.set(pid, pointsMap.get(pid)! + match.teamBGames);
+      }
+    }
+
+    // Convert points to rank positions (1 = highest scorer)
+    const sortedByPoints = [...playerIds].sort(
+      (a, b) => (pointsMap.get(b) ?? 0) - (pointsMap.get(a) ?? 0),
+    );
+    const rankMap = new Map<number, number>();
+    sortedByPoints.forEach((pid, i) => rankMap.set(pid, i + 1));
+
+    const pairs = suggestFixedPairs(playerIds, rankMap, pairingHistory);
+    return { success: true as const, pairs };
+  } catch (error) {
+    console.error("Error suggesting pairs:", error);
+    return {
+      success: false as const,
+      error: "Failed to suggest pairs. Please try again.",
     };
   }
 }

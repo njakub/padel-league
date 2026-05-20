@@ -121,7 +121,7 @@ function LeagueView({
   const noSeasonBg = isSunday
     ? "bg-blue-50 border-blue-200"
     : "bg-purple-50 border-purple-200";
-  const leagueLabel = isSunday ? "Sunday League" : "Americano Pairs";
+  const leagueLabel = isSunday ? "Sunday League" : "Wednesday League";
   const playersList = isSunday
     ? "Jakub · Joe · Jon · Matt · Charlie"
     : "8 players per season · 2 courts · no sit-outs";
@@ -151,12 +151,17 @@ function LeagueView({
                 />
               </div>
             </div>
-            <Link
-              href={`/season/${data.activeSeason.id}`}
-              className={`px-4 py-2 bg-${accentColor}-600 text-white rounded-md hover:bg-${accentColor}-700 transition-colors`}
-            >
-              View Details
-            </Link>
+            <div className="flex items-center gap-3">
+              {!isSunday && (
+                <CreateWednesdaySeasonButton players={allPlayers} />
+              )}
+              <Link
+                href={`/season/${data.activeSeason.id}`}
+                className={`px-4 py-2 bg-${accentColor}-600 text-white rounded-md hover:bg-${accentColor}-700 transition-colors`}
+              >
+                View Details
+              </Link>
+            </div>
           </div>
 
           {data.activeSeason.standings.length > 0 && (
@@ -431,9 +436,9 @@ export default function LeagueTabs({
           }`}
         >
           <div className="flex items-center justify-center gap-1 sm:gap-2">
-            <span>�</span>
-            <span className="hidden sm:inline">Americano Pairs</span>
-            <span className="sm:hidden">Americano</span>
+            <span>🌙</span>
+            <span className="hidden sm:inline">Wednesday League</span>
+            <span className="sm:hidden">Wed</span>
             {wednesdayHasActive && (
               <span
                 className="w-2 h-2 rounded-full bg-green-500 inline-block"

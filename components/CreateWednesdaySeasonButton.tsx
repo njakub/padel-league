@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { createWednesdaySeason, createPlayer } from "@/app/actions";
+import {
+  createWednesdaySeason,
+  createPlayer,
+  suggestWednesdayPairs,
+} from "@/app/actions";
+
+type FixedPairs = [
+  [number, number],
+  [number, number],
+  [number, number],
+  [number, number],
+];
 
 interface Props {
   players: { id: number; name: string }[];
 }
-
-// null means the slot is empty
-type Pair = [number | null, number | null];
-const EMPTY_PAIRS: [Pair, Pair, Pair, Pair] = [
-  [null, null],
-  [null, null],
-  [null, null],
-  [null, null],
-];
 
 export default function CreateWednesdaySeasonButton({
   players: initialPlayers,
@@ -22,58 +24,90 @@ export default function CreateWednesdaySeasonButton({
   const [isOpen, setIsOpen] = useState(false);
   const [totalMatches, setTotalMatches] = useState<6 | 12 | 18 | 24>(6);
   const [seasonName, setSeasonName] = useState("");
-  const [pairs, setPairs] = useState<[Pair, Pair, Pair, Pair]>(
-    structuredClone(EMPTY_PAIRS),
-  );
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [pairs, setPairs] = useState<FixedPairs | null>(null);
+  const [swapTarget, setSwapTarget] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Local player pool (starts from DB; grows when a new player is added)
   const [playerPool, setPlayerPool] = useState(initialPlayers);
+
+  // Add-new-player sub-form
   const [newPlayerName, setNewPlayerName] = useState("");
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
 
-  // All player IDs currently assigned to any slot
-  const assignedIds = new Set(pairs.flat().filter((id): id is number => id !== null));
+  // Quick name lookup
+  const playerById = new Map(playerPool.map((p) => [p.id, p.name]));
 
-  const assignToSlot = (pairIdx: number, slot: 0 | 1, playerId: number | null) => {
-    setPairs((prev) => {
-      const next: [Pair, Pair, Pair, Pair] = prev.map((p) => [...p] as Pair) as [
-        Pair, Pair, Pair, Pair,
-      ];
-      // If this player is already assigned elsewhere, remove them first
-      if (playerId !== null) {
-        for (let pi = 0; pi < 4; pi++) {
-          for (let si = 0; si < 2; si++) {
-            if (next[pi][si] === playerId) next[pi][si] = null;
-          }
-        }
-      }
-      next[pairIdx][slot] = playerId;
-      return next;
-    });
+  /** Build default pairs from the first 8 selected IDs in insertion order. */
+  function makeDefaultPairs(ids: number[]): FixedPairs {
+    return [
+      [ids[0], ids[1]],
+      [ids[2], ids[3]],
+      [ids[4], ids[5]],
+      [ids[6], ids[7]],
+    ];
+  }
+
+  const togglePlayer = (id: number) => {
+    const newIds = new Set(selectedIds);
+    if (newIds.has(id)) {
+      newIds.delete(id);
+    } else {
+      newIds.add(id);
+    }
+
+    const arr = Array.from(newIds);
+    if (arr.length === 8) {
+      setPairs(makeDefaultPairs(arr));
+    } else {
+      setPairs(null);
+      setSwapTarget(null);
+    }
+
+    setSelectedIds(newIds);
   };
 
-  const allPairsFull = pairs.every((p) => p[0] !== null && p[1] !== null);
-
-  const handleOpen = () => {
-    setIsOpen(true);
-    setError(null);
-    setPairs(structuredClone(EMPTY_PAIRS));
-    setSeasonName("");
-    setTotalMatches(6);
-    setNewPlayerName("");
-    setAddPlayerError(null);
-    setPlayerPool(initialPlayers);
+  /** Swap two players between pairs when user click-selects them. */
+  const handlePlayerClick = (playerId: number) => {
+    if (isLoading || isSuggesting) return;
+    if (swapTarget === null) {
+      setSwapTarget(playerId);
+      return;
+    }
+    if (swapTarget === playerId) {
+      setSwapTarget(null);
+      return;
+    }
+    // Perform the swap
+    if (pairs) {
+      const newPairs = pairs.map(([a, b]): [number, number] => {
+        if (a === swapTarget) return [playerId, b];
+        if (b === swapTarget) return [a, playerId];
+        if (a === playerId) return [swapTarget, b];
+        if (b === playerId) return [a, swapTarget];
+        return [a, b];
+      }) as FixedPairs;
+      setPairs(newPairs);
+    }
+    setSwapTarget(null);
   };
 
-  const handleClose = () => {
-    setIsOpen(false);
+  const handleSuggestPairs = async () => {
+    if (selectedIds.size !== 8) return;
+    setIsSuggesting(true);
     setError(null);
-    setPairs(structuredClone(EMPTY_PAIRS));
-    setSeasonName("");
-    setNewPlayerName("");
-    setAddPlayerError(null);
+    const ids = Array.from(selectedIds);
+    const result = await suggestWednesdayPairs(ids);
+    if (result.success) {
+      setPairs(result.pairs as FixedPairs);
+    } else {
+      setError(result.error ?? "Failed to suggest pairs.");
+    }
+    setIsSuggesting(false);
   };
 
   const handleAddNewPlayer = async () => {
@@ -81,39 +115,78 @@ export default function CreateWednesdaySeasonButton({
     if (!trimmed) return;
     setAddingPlayer(true);
     setAddPlayerError(null);
+
     const result = await createPlayer(trimmed);
     if (result.success) {
-      setAddPlayerError(`"${trimmed}" added! They will appear in the dropdowns.`);
+      // createPlayer doesn't return the new ID, so add a placeholder with a
+      // temporary negative ID and inform the user to reclose if needed.
+      // In practice, next open will reload from the server via page refresh.
+      setAddPlayerError(
+        `"${trimmed}" added! They will appear in the list — close and reopen if not visible.`,
+      );
       setNewPlayerName("");
+      // Optimistically add to local pool with temp ID so user can immediately select them
+      // We won't know the real ID until page refreshes, but we can fetch it
       setPlayerPool((prev) => {
         if (prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase()))
           return prev;
         return [...prev, { id: -(prev.length + 1), name: trimmed }];
       });
     } else {
-      setAddPlayerError(result.error ?? "Failed to add player");
+      setAddPlayerError(result.error || "Failed to add player");
     }
     setAddingPlayer(false);
   };
 
+  const handleOpen = () => {
+    setIsOpen(true);
+    setError(null);
+    setSelectedIds(new Set());
+    setSeasonName("");
+    setTotalMatches(6);
+    setNewPlayerName("");
+    setAddPlayerError(null);
+    setPairs(null);
+    setSwapTarget(null);
+    setPlayerPool(initialPlayers);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setError(null);
+    setSelectedIds(new Set());
+    setSeasonName("");
+    setNewPlayerName("");
+    setAddPlayerError(null);
+    setPairs(null);
+    setSwapTarget(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allPairsFull) {
-      setError("All 4 pairs must have 2 players assigned.");
+    if (selectedIds.size !== 8) {
+      setError("You must select exactly 8 players.");
+      return;
+    }
+    if (!pairs) {
+      setError("Please assign or suggest pairs before creating the season.");
       return;
     }
     setIsLoading(true);
     setError(null);
+
     const result = await createWednesdaySeason(
       totalMatches,
-      pairs as [[number, number], [number, number], [number, number], [number, number]],
+      pairs,
       seasonName || undefined,
     );
+
     if (result.success) {
       handleClose();
     } else {
-      setError(result.error ?? "Failed to create season");
+      setError(result.error || "Failed to create season");
     }
+
     setIsLoading(false);
   };
 
@@ -130,10 +203,10 @@ export default function CreateWednesdaySeasonButton({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
-              Create Americano Pairs Season
+              Create Wednesday League Season
             </h2>
             <p className="text-sm text-gray-500 mb-4">
-              4 fixed pairs · 2 courts · no sit-outs
+              8 players · 4 fixed pairs · 2 courts · no sit-outs
             </p>
 
             {error && (
@@ -161,7 +234,8 @@ export default function CreateWednesdaySeasonButton({
                   disabled={isLoading}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Leave empty to auto-generate (e.g., &quot;Americano Season 1&quot;)
+                  Leave empty to auto-generate (e.g., &quot;Americano Season
+                  1&quot;)
                 </p>
               </div>
 
@@ -183,71 +257,63 @@ export default function CreateWednesdaySeasonButton({
                       }`}
                       disabled={isLoading}
                     >
-                      <div className="font-semibold">{option}</div>
-                      <div className="text-xs text-gray-500">matches</div>
+                      <div className="font-semibold text-sm">
+                        {option} matches
+                      </div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {option / 6}× cycle
+                        {option / 2} sessions
                       </div>
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  1 cycle = 6 matches (3 rounds) · every pair faces every other pair once
+                  Each session = 2 simultaneous matches · all pair matchups
+                  covered once per 6-match cycle
                 </p>
               </div>
 
-              {/* Pair Assignment */}
+              {/* Player Picker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assign Players to Pairs
+                  Select Players{" "}
+                  <span
+                    className={`font-semibold ${
+                      selectedIds.size === 8
+                        ? "text-green-600"
+                        : selectedIds.size > 8
+                          ? "text-red-600"
+                          : "text-purple-600"
+                    }`}
+                  >
+                    ({selectedIds.size}/8 selected)
+                  </span>
                 </label>
-                <div className="space-y-2">
-                  {([0, 1, 2, 3] as const).map((pi) => {
-                    const pairColors = [
-                      "border-blue-300 bg-blue-50",
-                      "border-green-300 bg-green-50",
-                      "border-orange-300 bg-orange-50",
-                      "border-pink-300 bg-pink-50",
-                    ];
+                <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto border border-gray-200 rounded-md p-2">
+                  {playerPool.map((player) => {
+                    const checked = selectedIds.has(player.id);
+                    const atMax = !checked && selectedIds.size >= 8;
                     return (
-                      <div
-                        key={pi}
-                        className={`flex items-center gap-2 p-2 rounded-md border ${pairColors[pi]}`}
+                      <label
+                        key={player.id}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${
+                          checked
+                            ? "border-purple-500 bg-purple-50"
+                            : atMax || isLoading
+                              ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                              : "border-gray-200 hover:border-purple-300 hover:bg-purple-50"
+                        }`}
                       >
-                        <span className="text-xs font-bold text-gray-500 w-12 shrink-0">
-                          Pair {pi + 1}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => togglePlayer(player.id)}
+                          disabled={atMax || isLoading}
+                          className="accent-purple-600"
+                        />
+                        <span className="text-sm font-medium">
+                          {player.name}
                         </span>
-                        {([0, 1] as const).map((si) => {
-                          const currentId = pairs[pi][si];
-                          return (
-                            <select
-                              key={si}
-                              value={currentId ?? ""}
-                              onChange={(e) =>
-                                assignToSlot(
-                                  pi,
-                                  si,
-                                  e.target.value ? Number(e.target.value) : null,
-                                )
-                              }
-                              disabled={isLoading}
-                              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-                            >
-                              <option value="">— player {si + 1} —</option>
-                              {playerPool.map((p) => {
-                                const takenElsewhere =
-                                  assignedIds.has(p.id) && p.id !== currentId;
-                                if (takenElsewhere) return null;
-                                return (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          );
-                        })}
-                      </div>
+                      </label>
                     );
                   })}
                 </div>
@@ -276,7 +342,9 @@ export default function CreateWednesdaySeasonButton({
                   <button
                     type="button"
                     onClick={handleAddNewPlayer}
-                    disabled={!newPlayerName.trim() || addingPlayer || isLoading}
+                    disabled={
+                      !newPlayerName.trim() || addingPlayer || isLoading
+                    }
                     className="px-3 py-2 text-sm bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {addingPlayer ? "Adding..." : "Add"}
@@ -285,13 +353,105 @@ export default function CreateWednesdaySeasonButton({
                 {addPlayerError && (
                   <p
                     className={`text-xs mt-1 ${
-                      addPlayerError.includes("added") ? "text-green-600" : "text-red-600"
+                      addPlayerError.includes("added")
+                        ? "text-green-600"
+                        : "text-red-600"
                     }`}
                   >
                     {addPlayerError}
                   </p>
                 )}
               </div>
+
+              {/* ── Pair Assignment (visible once 8 players are selected) ── */}
+              {selectedIds.size === 8 && pairs && (
+                <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-purple-900">
+                        Fixed Pairs
+                      </h3>
+                      <p className="text-xs text-purple-700 mt-0.5">
+                        These partnerships are fixed for the whole season.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSuggestPairs}
+                      disabled={isLoading || isSuggesting}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap"
+                    >
+                      {isSuggesting ? (
+                        <>
+                          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Calculating…
+                        </>
+                      ) : (
+                        <>✨ Suggest Smart Pairs</>
+                      )}
+                    </button>
+                  </div>
+
+                  {swapTarget !== null && (
+                    <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1 mb-2">
+                      Now click another player to swap, or click the same player
+                      to cancel.
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    {pairs.map(([p1Id, p2Id], i) => {
+                      const p1Name = playerById.get(p1Id) ?? "?";
+                      const p2Name = playerById.get(p2Id) ?? "?";
+
+                      const btnClass = (pid: number) => {
+                        const isTarget = swapTarget === pid;
+                        const isPending =
+                          swapTarget !== null && swapTarget !== pid;
+                        return [
+                          "flex-1 py-1.5 px-3 rounded-md text-sm font-medium border transition-colors",
+                          isTarget
+                            ? "bg-blue-100 border-blue-400 text-blue-900 ring-2 ring-blue-300"
+                            : isPending
+                              ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
+                              : "bg-white border-gray-300 text-gray-800 hover:bg-purple-50 hover:border-purple-300 cursor-pointer",
+                        ].join(" ");
+                      };
+
+                      return (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-purple-500 w-8 text-center font-mono font-bold">
+                            P{i + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handlePlayerClick(p1Id)}
+                            className={btnClass(p1Id)}
+                            disabled={isLoading}
+                          >
+                            {p1Name}
+                          </button>
+                          <span className="text-purple-400 font-bold">+</span>
+                          <button
+                            type="button"
+                            onClick={() => handlePlayerClick(p2Id)}
+                            className={btnClass(p2Id)}
+                            disabled={isLoading}
+                          >
+                            {p2Name}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-xs text-purple-600 mt-3">
+                    💡 &quot;Suggest Smart Pairs&quot; uses league history and
+                    standings to avoid repeat partnerships and balance team
+                    strength. Click any two players to swap them manually.
+                  </p>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
@@ -306,9 +466,9 @@ export default function CreateWednesdaySeasonButton({
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isLoading || !allPairsFull}
+                  disabled={isLoading || selectedIds.size !== 8 || !pairs}
                 >
-                  {isLoading ? "Creating..." : "Create Season"}
+                  {isLoading ? "Creating…" : "Create Season"}
                 </button>
               </div>
             </form>
