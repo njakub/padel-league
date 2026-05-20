@@ -42,20 +42,19 @@ export function suggestFixedPairs(
   const pairKey = (a: number, b: number) =>
     `${Math.min(a, b)}-${Math.max(a, b)}`;
 
-  /** Recursively generate all ways to partition `ids` into pairs. */
-  function* partitions(ids: number[]): Generator<[number, number][]> {
-    if (ids.length === 0) {
-      yield [];
-      return;
-    }
+  /** Recursively enumerate all ways to partition `ids` into pairs. */
+  function partitions(ids: number[]): [number, number][][] {
+    if (ids.length === 0) return [[]];
     const [first, ...rest] = ids;
+    const result: [number, number][][] = [];
     for (let i = 0; i < rest.length; i++) {
       const partner = rest[i];
       const remaining = rest.filter((_, j) => j !== i);
       for (const sub of partitions(remaining)) {
-        yield [[first, partner], ...sub];
+        result.push([[first, partner], ...sub]);
       }
     }
+    return result;
   }
 
   function scorePartition(partition: [number, number][]): number {
