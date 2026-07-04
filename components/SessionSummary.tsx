@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { calculatePlayerPoints, type ScoringStyle } from "@/lib/scoring";
 
 interface Match {
   id: number;
@@ -19,6 +20,7 @@ interface Match {
 interface SessionSummaryProps {
   matches: Match[];
   seasonName: string;
+  scoringStyle?: ScoringStyle;
 }
 
 interface PlayerSessionStats {
@@ -47,6 +49,7 @@ interface PlayerComparison {
 export default function SessionSummary({
   matches,
   seasonName,
+  scoringStyle = "standard",
 }: SessionSummaryProps) {
   const [isOpen, setIsOpen] = useState(false);
   // Get today's date at midnight for comparison
@@ -106,6 +109,7 @@ export default function SessionSummary({
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
       const teamBPlayers = [match.teamBPlayer1.id, match.teamBPlayer2.id];
       const teamAWon = match.winnerTeam === "A";
+      const teamBWon = match.winnerTeam === "B";
 
       // Update team A players
       teamAPlayers.forEach((playerId) => {
@@ -113,13 +117,13 @@ export default function SessionSummary({
         stats.matchesPlayed++;
         stats.gamesWon += match.teamAGames!;
         stats.gamesLost += match.teamBGames!;
-        if (teamAWon) {
-          stats.wins++;
-          stats.points += match.teamAGames! + 1; // games + win bonus
-        } else {
-          stats.losses++;
-          stats.points += match.teamAGames!; // games only
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamAGames!,
+          teamAWon,
+          scoringStyle,
+        );
+        if (teamAWon) stats.wins++;
+        else if (teamBWon) stats.losses++;
       });
 
       // Update team B players
@@ -128,13 +132,13 @@ export default function SessionSummary({
         stats.matchesPlayed++;
         stats.gamesWon += match.teamBGames!;
         stats.gamesLost += match.teamAGames!;
-        if (!teamAWon) {
-          stats.wins++;
-          stats.points += match.teamBGames! + 1; // games + win bonus
-        } else {
-          stats.losses++;
-          stats.points += match.teamBGames!; // games only
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamBGames!,
+          teamBWon,
+          scoringStyle,
+        );
+        if (teamBWon) stats.wins++;
+        else if (teamAWon) stats.losses++;
       });
 
       // Update sit-out count
@@ -148,7 +152,7 @@ export default function SessionSummary({
     return Array.from(statsMap.values())
       .sort((a, b) => b.points - a.points)
       .map((stat, index) => ({ ...stat, sessionRank: index + 1 }));
-  }, [todayMatches]);
+  }, [todayMatches, scoringStyle]);
 
   // Calculate overall season stats (all matches)
   const overallStats = useMemo(() => {
@@ -186,30 +190,31 @@ export default function SessionSummary({
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
       const teamBPlayers = [match.teamBPlayer1.id, match.teamBPlayer2.id];
       const teamAWon = match.winnerTeam === "A";
+      const teamBWon = match.winnerTeam === "B";
 
       teamAPlayers.forEach((playerId) => {
         const stats = statsMap.get(playerId)!;
-        if (teamAWon) {
-          stats.points += match.teamAGames! + 1;
-        } else {
-          stats.points += match.teamAGames!;
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamAGames!,
+          teamAWon,
+          scoringStyle,
+        );
       });
 
       teamBPlayers.forEach((playerId) => {
         const stats = statsMap.get(playerId)!;
-        if (!teamAWon) {
-          stats.points += match.teamBGames! + 1;
-        } else {
-          stats.points += match.teamBGames!;
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamBGames!,
+          teamBWon,
+          scoringStyle,
+        );
       });
     });
 
     return Array.from(statsMap.values())
       .sort((a, b) => b.points - a.points)
       .map((stat, index) => ({ ...stat, overallRank: index + 1 }));
-  }, [matches]);
+  }, [matches, scoringStyle]);
 
   // Calculate stats before today's session
   const beforeSessionStats = useMemo(() => {
@@ -254,30 +259,31 @@ export default function SessionSummary({
       const teamAPlayers = [match.teamAPlayer1.id, match.teamAPlayer2.id];
       const teamBPlayers = [match.teamBPlayer1.id, match.teamBPlayer2.id];
       const teamAWon = match.winnerTeam === "A";
+      const teamBWon = match.winnerTeam === "B";
 
       teamAPlayers.forEach((playerId) => {
         const stats = statsMap.get(playerId)!;
-        if (teamAWon) {
-          stats.points += match.teamAGames! + 1;
-        } else {
-          stats.points += match.teamAGames!;
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamAGames!,
+          teamAWon,
+          scoringStyle,
+        );
       });
 
       teamBPlayers.forEach((playerId) => {
         const stats = statsMap.get(playerId)!;
-        if (!teamAWon) {
-          stats.points += match.teamBGames! + 1;
-        } else {
-          stats.points += match.teamBGames!;
-        }
+        stats.points += calculatePlayerPoints(
+          match.teamBGames!,
+          teamBWon,
+          scoringStyle,
+        );
       });
     });
 
     return Array.from(statsMap.values())
       .sort((a, b) => b.points - a.points)
       .map((stat, index) => ({ ...stat, rankBefore: index + 1 }));
-  }, [matches, today]);
+  }, [matches, today, scoringStyle]);
 
   // Create comparison data
   const playerComparisons = useMemo(() => {

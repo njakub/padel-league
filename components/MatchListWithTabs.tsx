@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import MatchResultForm from "./MatchResultForm";
-import DeleteAdhocMatchButton from "./DeleteAdhocMatchButton";
+import type { ScoringStyle } from "@/lib/scoring";
 
 interface Match {
   id: number;
@@ -20,15 +20,13 @@ interface Match {
 interface MatchListWithTabsProps {
   matches: Match[];
   seasonStatus: string;
-  isAdhoc?: boolean;
-  leagueType?: string;
+  scoringStyle?: ScoringStyle;
 }
 
 export default function MatchListWithTabs({
   matches,
   seasonStatus,
-  isAdhoc = false,
-  leagueType,
+  scoringStyle = "standard",
 }: MatchListWithTabsProps) {
   const [activeTab, setActiveTab] = useState<"pending" | "completed">(
     "pending",
@@ -300,7 +298,7 @@ export default function MatchListWithTabs({
                       {match.winnerTeam === "DRAW" ? "DRAW" : "vs"}
                     </div>
                   ) : (
-                    <MatchResultForm match={match} leagueType={leagueType} />
+                    <MatchResultForm match={match} scoringStyle={scoringStyle} />
                   )}
                 </div>
 
@@ -326,18 +324,10 @@ export default function MatchListWithTabs({
                 </div>
               </div>
 
-              {/* Edit / Remove row for completed matches */}
+              {/* Edit row for completed matches */}
               {match.winnerTeam && seasonStatus === "ACTIVE" && (
                 <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end gap-2">
-                  <MatchResultForm match={match} isEdit leagueType={leagueType} />
-                  {isAdhoc && <DeleteAdhocMatchButton matchId={match.id} />}
-                </div>
-              )}
-
-              {/* Remove button for pending adhoc matches */}
-              {!match.winnerTeam && isAdhoc && seasonStatus === "ACTIVE" && (
-                <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end">
-                  <DeleteAdhocMatchButton matchId={match.id} />
+                  <MatchResultForm match={match} isEdit scoringStyle={scoringStyle} />
                 </div>
               )}
             </div>

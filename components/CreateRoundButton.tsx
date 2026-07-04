@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  createWednesdaySeason,
-  createPlayer,
-  suggestWednesdayPairs,
-} from "@/app/actions";
+import { createRound, createPlayer, suggestWednesdayPairs } from "@/app/actions";
 
 type FixedPairs = [
   [number, number],
@@ -15,15 +11,21 @@ type FixedPairs = [
 ];
 
 interface Props {
+  leagueId: number;
+  leagueName: string;
+  roundLengths: number[];
   players: { id: number; name: string }[];
 }
 
-export default function CreateWednesdaySeasonButton({
+export default function CreateRoundButton({
+  leagueId,
+  leagueName,
+  roundLengths,
   players: initialPlayers,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
-  const [totalMatches, setTotalMatches] = useState<6 | 12 | 18 | 24>(6);
-  const [seasonName, setSeasonName] = useState("");
+  const [totalMatches, setTotalMatches] = useState<number>(roundLengths[0]);
+  const [roundName, setRoundName] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [pairs, setPairs] = useState<FixedPairs | null>(null);
   const [swapTarget, setSwapTarget] = useState<number | null>(null);
@@ -82,7 +84,6 @@ export default function CreateWednesdaySeasonButton({
       setSwapTarget(null);
       return;
     }
-    // Perform the swap
     if (pairs) {
       const newPairs = pairs.map(([a, b]): [number, number] => {
         if (a === swapTarget) return [playerId, b];
@@ -118,15 +119,10 @@ export default function CreateWednesdaySeasonButton({
 
     const result = await createPlayer(trimmed);
     if (result.success) {
-      // createPlayer doesn't return the new ID, so add a placeholder with a
-      // temporary negative ID and inform the user to reclose if needed.
-      // In practice, next open will reload from the server via page refresh.
       setAddPlayerError(
         `"${trimmed}" added! They will appear in the list — close and reopen if not visible.`,
       );
       setNewPlayerName("");
-      // Optimistically add to local pool with temp ID so user can immediately select them
-      // We won't know the real ID until page refreshes, but we can fetch it
       setPlayerPool((prev) => {
         if (prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase()))
           return prev;
@@ -142,8 +138,8 @@ export default function CreateWednesdaySeasonButton({
     setIsOpen(true);
     setError(null);
     setSelectedIds(new Set());
-    setSeasonName("");
-    setTotalMatches(6);
+    setRoundName("");
+    setTotalMatches(roundLengths[0]);
     setNewPlayerName("");
     setAddPlayerError(null);
     setPairs(null);
@@ -155,7 +151,7 @@ export default function CreateWednesdaySeasonButton({
     setIsOpen(false);
     setError(null);
     setSelectedIds(new Set());
-    setSeasonName("");
+    setRoundName("");
     setNewPlayerName("");
     setAddPlayerError(null);
     setPairs(null);
@@ -169,22 +165,23 @@ export default function CreateWednesdaySeasonButton({
       return;
     }
     if (!pairs) {
-      setError("Please assign or suggest pairs before creating the season.");
+      setError("Please assign or suggest pairs before creating the round.");
       return;
     }
     setIsLoading(true);
     setError(null);
 
-    const result = await createWednesdaySeason(
+    const result = await createRound(
+      leagueId,
       totalMatches,
       pairs,
-      seasonName || undefined,
+      roundName || undefined,
     );
 
     if (result.success) {
       handleClose();
     } else {
-      setError(result.error || "Failed to create season");
+      setError(result.error || "Failed to create round");
     }
 
     setIsLoading(false);
@@ -196,14 +193,14 @@ export default function CreateWednesdaySeasonButton({
         onClick={handleOpen}
         className="px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold"
       >
-        + Create New Season
+        + Create New Round
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
-              Create Wednesday League Season
+              Create Round — {leagueName}
             </h2>
             <p className="text-sm text-gray-500 mb-4">
               8 players · 4 fixed pairs · 2 courts · no sit-outs
@@ -216,36 +213,35 @@ export default function CreateWednesdaySeasonButton({
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Season Name */}
+              {/* Round Name */}
               <div>
                 <label
-                  htmlFor="wednesdaySeasonName"
+                  htmlFor="roundName"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  Season Name (optional)
+                  Round Name (optional)
                 </label>
                 <input
-                  id="wednesdaySeasonName"
+                  id="roundName"
                   type="text"
-                  value={seasonName}
-                  onChange={(e) => setSeasonName(e.target.value)}
-                  placeholder="e.g., Spring 2026"
+                  value={roundName}
+                  onChange={(e) => setRoundName(e.target.value)}
+                  placeholder="e.g., Round 4"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   disabled={isLoading}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Leave empty to auto-generate (e.g., &quot;Americano Season
-                  1&quot;)
+                  Leave empty to auto-generate (e.g., &quot;Round 4&quot;)
                 </p>
               </div>
 
-              {/* Season Length */}
+              {/* Round Length */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Season Length
+                  Round Length
                 </label>
                 <div className="grid grid-cols-4 gap-2">
-                  {([6, 12, 18, 24] as const).map((option) => (
+                  {roundLengths.map((option) => (
                     <button
                       key={option}
                       type="button"
@@ -372,7 +368,7 @@ export default function CreateWednesdaySeasonButton({
                         Fixed Pairs
                       </h3>
                       <p className="text-xs text-purple-700 mt-0.5">
-                        These partnerships are fixed for the whole season.
+                        These partnerships are fixed for this round.
                       </p>
                     </div>
                     <button
@@ -446,9 +442,9 @@ export default function CreateWednesdaySeasonButton({
                   </div>
 
                   <p className="text-xs text-purple-600 mt-3">
-                    💡 &quot;Suggest Smart Pairs&quot; uses league history and
-                    standings to avoid repeat partnerships and balance team
-                    strength. Click any two players to swap them manually.
+                    💡 &quot;Suggest Smart Pairs&quot; hard-avoids partners
+                    already used this season and balances team strength.
+                    Click any two players to swap them manually.
                   </p>
                 </div>
               )}
@@ -468,7 +464,7 @@ export default function CreateWednesdaySeasonButton({
                   className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isLoading || selectedIds.size !== 8 || !pairs}
                 >
-                  {isLoading ? "Creating…" : "Create Season"}
+                  {isLoading ? "Creating…" : "Create Round"}
                 </button>
               </div>
             </form>

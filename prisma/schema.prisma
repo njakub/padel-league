@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -28,23 +28,65 @@ model Player {
   teamBPlayer2Matches Match[] @relation("TeamBPlayer2")
 }
 
-model Season {
+// A recurring group of players playing one format (e.g. "Wednesday League").
+// All-time home for the tally + season history.
+model League {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique // backfill idempotency key, e.g. "wednesday"
+  name      String
+  format    String // format registry id, e.g. "americano-pairs"
+  createdAt DateTime @default(now())
+
+  seasons LeagueSeason[]
+  rounds  Round[]
+}
+
+// One full partner cycle within a League (e.g. 7 rounds for 8 players —
+// everyone has partnered everyone once). Auto-completes when its round
+// count reaches the format's seasonRounds.
+model LeagueSeason {
+  id          Int       @id @default(autoincrement())
+  league      League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  leagueId    Int
+  number      Int // Season 1, 2, ... within the league
+  status      String    @default("ACTIVE") // "ACTIVE" or "COMPLETED"
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  rounds Round[]
+
+  @@unique([leagueId, number])
+}
+
+// Prisma model renamed to Round; physical table name is unchanged so no
+// data migration is needed (@@map keeps it pointing at the live "Season" table).
+model Round {
   id           Int      @id @default(autoincrement())
   name         String
   createdAt    DateTime @default(now())
   status       String   @default("ACTIVE") // "ACTIVE" or "COMPLETED"
   totalMatches Int? // Sunday: 15, 30, 45, 60 | Wednesday: 12, 24, 36 | null for ADHOC
-  leagueType   String   @default("SUNDAY") // "SUNDAY", "WEDNESDAY", or "ADHOC"
+  leagueType   String   @default("SUNDAY") // legacy discriminator; dual-written for rollback safety, unused once League is populated
+
+  // Nullable during the transition: populated by the backfill script and by
+  // new round-creating actions once the League/Season write path ships.
+  league         League?       @relation(fields: [leagueId], references: [id])
+  leagueId       Int?
+  leagueSeason   LeagueSeason? @relation(fields: [leagueSeasonId], references: [id])
+  leagueSeasonId Int?
+  roundNumber    Int? // 1-based ordinal within its LeagueSeason, persisted (not recomputed)
 
   matches Match[]
+
+  @@map("Season")
 }
 
 model Match {
-  id            Int       @id @default(autoincrement())
-  season        Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  seasonId      Int
-  matchNumber   Int // 1 to totalMatches
-  
+  id          Int   @id @default(autoincrement())
+  round       Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId     Int   @map("seasonId")
+  matchNumber Int // 1 to totalMatches
+
   // Sit-out player (null for 4-player Wednesday League matches)
   sitOutPlayer   Player? @relation("SitOutPlayer", fields: [sitOutPlayerId], references: [id])
   sitOutPlayerId Int?
@@ -67,5 +109,5 @@ model Match {
   winnerTeam String? // "A" or "B"
   playedAt   DateTime?
 
-  @@unique([seasonId, matchNumber])
+  @@unique([roundId, matchNumber], map: "Match_seasonId_matchNumber_key")
 }

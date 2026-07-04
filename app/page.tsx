@@ -1,247 +1,100 @@
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
-import LeagueTabs, {
-  type LeagueData,
-  type WednesdayLeagueData,
-  type AdhocLeagueData,
-  type ActiveSeasonInfo,
-  type CompletedSeasonInfo,
-} from "@/components/LeagueTabs";
+import { calculateStandings } from "@/lib/scoring";
+import { getFormat } from "@/lib/formats";
+import LeagueCard, { type LeagueCardData } from "@/components/LeagueCard";
+import CreateLeagueButton from "@/components/CreateLeagueButton";
+import AddPlayerButton from "@/components/AddPlayerButton";
 
-const matchInclude = {
-  matches: {
-    include: {
-      teamAPlayer1: true,
-      teamAPlayer2: true,
-      teamBPlayer1: true,
-      teamBPlayer2: true,
-      sitOutPlayer: true,
-    },
-    orderBy: { matchNumber: "asc" as const },
-  },
-};
-
-async function buildSundayData(): Promise<LeagueData> {
-  const [activeSeason, completedSeasons, players] = await Promise.all([
-    prisma.season.findFirst({
-      where: { status: "ACTIVE", leagueType: "SUNDAY" },
-      include: matchInclude,
-    }),
-    prisma.season.findMany({
-      where: { status: "COMPLETED", leagueType: "SUNDAY" },
-      include: matchInclude,
-      orderBy: { createdAt: "desc" },
+async function getLeagueCards(): Promise<LeagueCardData[]> {
+  const [leagues, players] = await Promise.all([
+    prisma.league.findMany({
+      orderBy: { id: "asc" },
+      include: {
+        rounds: { include: { matches: true } },
+        seasons: { orderBy: { number: "desc" } },
+      },
     }),
     prisma.player.findMany({ orderBy: { id: "asc" } }),
   ]);
+  const playerMap = new Map(players.map((p) => [p.id, p.name]));
 
-  const leaguePlayers = players.filter((p) =>
-    ["Jakub", "Joe", "Jon", "Matt", "Charlie"].includes(p.name),
-  );
-  const playerMap = new Map(leaguePlayers.map((p) => [p.id, p.name]));
+  return leagues.map((league) => {
+    const format = getFormat(league.format);
+    const activeRoundRow =
+      league.rounds.find((r) => r.status === "ACTIVE") ?? null;
+    const currentSeason = league.seasons[0] ?? null;
+    const completedRoundsInSeason = currentSeason
+      ? league.rounds.filter(
+          (r) =>
+            r.leagueSeasonId === currentSeason.id && r.status === "COMPLETED",
+        ).length
+      : 0;
 
-  let activeSeasonInfo: ActiveSeasonInfo | null = null;
-  if (activeSeason) {
-    const standings = calculateStandings(
-      activeSeason.matches as Parameters<typeof calculateStandings>[0],
+    const completedMatches = league.rounds
+      .filter((r) => r.status === "COMPLETED")
+      .flatMap((r) => r.matches);
+    const topTally = calculateStandings(
+      completedMatches as Parameters<typeof calculateStandings>[0],
       playerMap,
-    );
-    const pairings = calculatePairingStats(
-      activeSeason.matches as Parameters<typeof calculatePairingStats>[0],
-      playerMap,
-    );
-    const completedCount = activeSeason.matches.filter(
-      (m) => m.winnerTeam !== null,
-    ).length;
-    activeSeasonInfo = {
-      id: activeSeason.id,
-      name: activeSeason.name,
-      totalMatches: activeSeason.totalMatches,
-      completedCount,
-      standings,
-      pairings,
+      format.scoringStyle,
+    )
+      .filter((s) => s.matchesPlayed > 0)
+      .slice(0, 3)
+      .map((s) => ({
+        playerId: s.playerId,
+        playerName: s.playerName,
+        points: s.points,
+      }));
+
+    return {
+      id: league.id,
+      name: league.name,
+      formatLabel: format.label,
+      activeRound: activeRoundRow
+        ? {
+            id: activeRoundRow.id,
+            name: activeRoundRow.name,
+            completedCount: activeRoundRow.matches.filter(
+              (m) => m.winnerTeam !== null,
+            ).length,
+            totalMatches: activeRoundRow.totalMatches,
+          }
+        : null,
+      currentSeasonNumber: currentSeason?.number ?? null,
+      seasonRoundsTarget: format.seasonRounds,
+      completedRoundsInSeason,
+      topTally,
     };
-  }
-
-  const completedSeasonsInfo: CompletedSeasonInfo[] = completedSeasons.map(
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      totalMatches: s.totalMatches,
-      createdAt: s.createdAt.toISOString(),
-      completedCount: s.matches.filter((m) => m.winnerTeam !== null).length,
-    }),
-  );
-
-  const allCompletedMatches = completedSeasons.flatMap((s) => s.matches);
-  const leagueTally = calculateStandings(
-    allCompletedMatches as Parameters<typeof calculateStandings>[0],
-    playerMap,
-  );
-  const leaguePairings = calculatePairingStats(
-    allCompletedMatches as Parameters<typeof calculatePairingStats>[0],
-    playerMap,
-  );
-
-  return {
-    activeSeason: activeSeasonInfo,
-    completedSeasons: completedSeasonsInfo,
-    leagueTally,
-    leaguePairings,
-  };
-}
-
-async function buildWednesdayData(): Promise<WednesdayLeagueData> {
-  const [activeSeason, completedSeasons, allPlayers] = await Promise.all([
-    prisma.season.findFirst({
-      where: { status: "ACTIVE", leagueType: "WEDNESDAY" },
-      include: matchInclude,
-    }),
-    prisma.season.findMany({
-      where: { status: "COMPLETED", leagueType: "WEDNESDAY" },
-      include: matchInclude,
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.player.findMany({ orderBy: { id: "asc" } }),
-  ]);
-
-  // Use all players as the map so any 8-player combination is supported
-  const playerMap = new Map(allPlayers.map((p) => [p.id, p.name]));
-
-  let activeSeasonInfo: ActiveSeasonInfo | null = null;
-  if (activeSeason) {
-    const standings = calculateStandings(
-      activeSeason.matches as Parameters<typeof calculateStandings>[0],
-      playerMap,
-      "americano",
-    ).filter((s) => s.matchesPlayed > 0);
-    const pairings = calculatePairingStats(
-      activeSeason.matches as Parameters<typeof calculatePairingStats>[0],
-      playerMap,
-      "americano",
-    );
-    const completedCount = activeSeason.matches.filter(
-      (m) => m.winnerTeam !== null,
-    ).length;
-    activeSeasonInfo = {
-      id: activeSeason.id,
-      name: activeSeason.name,
-      totalMatches: activeSeason.totalMatches,
-      completedCount,
-      standings,
-      pairings,
-    };
-  }
-
-  const completedSeasonsInfo: CompletedSeasonInfo[] = completedSeasons.map(
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      totalMatches: s.totalMatches,
-      createdAt: s.createdAt.toISOString(),
-      completedCount: s.matches.filter((m) => m.winnerTeam !== null).length,
-    }),
-  );
-
-  const allCompletedMatches = completedSeasons.flatMap((s) => s.matches);
-  const leagueTally = calculateStandings(
-    allCompletedMatches as Parameters<typeof calculateStandings>[0],
-    playerMap,
-    "americano",
-  ).filter((s) => s.matchesPlayed > 0);
-  const leaguePairings = calculatePairingStats(
-    allCompletedMatches as Parameters<typeof calculatePairingStats>[0],
-    playerMap,
-    "americano",
-  );
-
-  return {
-    activeSeason: activeSeasonInfo,
-    completedSeasons: completedSeasonsInfo,
-    leagueTally,
-    leaguePairings,
-    allPlayers: allPlayers.map((p) => ({ id: p.id, name: p.name })),
-  };
-}
-
-async function buildAdhocData(): Promise<AdhocLeagueData> {
-  const [activeSeason, completedSeasons, allPlayers] = await Promise.all([
-    prisma.season.findFirst({
-      where: { status: "ACTIVE", leagueType: "ADHOC" },
-      include: matchInclude,
-    }),
-    prisma.season.findMany({
-      where: { status: "COMPLETED", leagueType: "ADHOC" },
-      include: matchInclude,
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.player.findMany({ orderBy: { id: "asc" } }),
-  ]);
-
-  const playerMap = new Map(allPlayers.map((p) => [p.id, p.name]));
-
-  let activeSeasonInfo: ActiveSeasonInfo | null = null;
-  if (activeSeason) {
-    const standings = calculateStandings(
-      activeSeason.matches as Parameters<typeof calculateStandings>[0],
-      playerMap,
-    );
-    const pairings = calculatePairingStats(
-      activeSeason.matches as Parameters<typeof calculatePairingStats>[0],
-      playerMap,
-    );
-    const completedCount = activeSeason.matches.filter(
-      (m) => m.winnerTeam !== null,
-    ).length;
-    activeSeasonInfo = {
-      id: activeSeason.id,
-      name: activeSeason.name,
-      totalMatches: activeSeason.matches.length,
-      completedCount,
-      standings,
-      pairings,
-    };
-  }
-
-  const completedSeasonsInfo: CompletedSeasonInfo[] = completedSeasons.map(
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      totalMatches: s.matches.length,
-      createdAt: s.createdAt.toISOString(),
-      completedCount: s.matches.filter((m) => m.winnerTeam !== null).length,
-    }),
-  );
-
-  const allCompletedMatches = completedSeasons.flatMap((s) => s.matches);
-  const leagueTally = calculateStandings(
-    allCompletedMatches as Parameters<typeof calculateStandings>[0],
-    playerMap,
-  );
-  const leaguePairings = calculatePairingStats(
-    allCompletedMatches as Parameters<typeof calculatePairingStats>[0],
-    playerMap,
-  );
-
-  return {
-    activeSeason: activeSeasonInfo,
-    completedSeasons: completedSeasonsInfo,
-    leagueTally,
-    leaguePairings,
-    allPlayers: allPlayers.map((p) => ({ id: p.id, name: p.name })),
-  };
+  });
 }
 
 export default async function HomePage() {
-  const [sunday, wednesday, adhoc] = await Promise.all([
-    buildSundayData(),
-    buildWednesdayData(),
-    buildAdhocData(),
-  ]);
+  const leagues = await getLeagueCards();
 
   return (
-    <div>
-      <LeagueTabs sunday={sunday} wednesday={wednesday} adhoc={adhoc} />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-3xl font-bold text-gray-900">Padel Leagues</h1>
+        <div className="flex items-center gap-2">
+          <AddPlayerButton />
+          <CreateLeagueButton />
+        </div>
+      </div>
+
+      {leagues.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+          <p className="text-gray-600 mb-4">
+            No leagues yet — create one to start tracking matches.
+          </p>
+          <CreateLeagueButton />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {leagues.map((league) => (
+            <LeagueCard key={league.id} league={league} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

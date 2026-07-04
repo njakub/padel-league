@@ -1,33 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { createPlayer } from "@/app/actions";
+import { createLeague } from "@/app/actions";
+import { FORMATS } from "@/lib/formats";
 
-export default function AddPlayerButton() {
+const formatOptions = Object.values(FORMATS);
+
+export default function CreateLeagueButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [formatId, setFormatId] = useState<string>(formatOptions[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("League name cannot be empty.");
+      return;
+    }
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
 
-    const result = await createPlayer(name);
+    const result = await createLeague(trimmed, formatId);
 
     if (result.success) {
-      setSuccess(`${name.trim()} added!`);
+      setIsOpen(false);
       setName("");
-      // Auto-close after a short delay
-      setTimeout(() => {
-        setIsOpen(false);
-        setSuccess(null);
-      }, 1200);
     } else {
-      setError(result.error || "Failed to add player");
+      setError(result.error || "Failed to create league");
     }
 
     setIsLoading(false);
@@ -39,37 +41,18 @@ export default function AddPlayerButton() {
         onClick={() => {
           setIsOpen(true);
           setError(null);
-          setSuccess(null);
         }}
-        className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        title="Add player"
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-semibold"
       >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-          />
-        </svg>
-        <span className="hidden sm:inline">Add Player</span>
+        + New League
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-1">
-              Add New Player
+            <h3 className="text-xl font-bold text-gray-900 mb-4">
+              Create League
             </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              The player is added to the pool immediately — pick them when
-              creating the next round in any league.
-            </p>
 
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -77,26 +60,20 @@ export default function AddPlayerButton() {
               </div>
             )}
 
-            {success && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm text-green-800">{success}</p>
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label
-                  htmlFor="playerName"
+                  htmlFor="leagueName"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
                   Name
                 </label>
                 <input
-                  id="playerName"
+                  id="leagueName"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Alex"
+                  placeholder="e.g. Wednesday League"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={isLoading}
                   autoFocus
@@ -104,15 +81,32 @@ export default function AddPlayerButton() {
                 />
               </div>
 
+              <div>
+                <label
+                  htmlFor="leagueFormat"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Format
+                </label>
+                <select
+                  id="leagueFormat"
+                  value={formatId}
+                  onChange={(e) => setFormatId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  {formatOptions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setName("");
-                    setError(null);
-                    setSuccess(null);
-                  }}
+                  onClick={() => setIsOpen(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
                   disabled={isLoading}
                 >
@@ -123,7 +117,7 @@ export default function AddPlayerButton() {
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50"
                   disabled={isLoading || !name.trim()}
                 >
-                  {isLoading ? "Adding…" : "Add Player"}
+                  {isLoading ? "Creating…" : "Create League"}
                 </button>
               </div>
             </form>

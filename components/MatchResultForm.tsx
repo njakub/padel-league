@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { recordMatchResult, deleteMatchResult } from "@/app/actions";
+import type { ScoringStyle } from "@/lib/scoring";
 
 interface Match {
   id: number;
@@ -17,15 +18,15 @@ interface Match {
 interface MatchResultFormProps {
   match: Match;
   isEdit?: boolean;
-  leagueType?: string;
+  scoringStyle?: ScoringStyle;
 }
 
 export default function MatchResultForm({
   match,
   isEdit = false,
-  leagueType,
+  scoringStyle = "standard",
 }: MatchResultFormProps) {
-  const isAmericano = leagueType === "WEDNESDAY";
+  const isAmericano = scoringStyle === "americano";
   const [isOpen, setIsOpen] = useState(false);
   const [teamAGames, setTeamAGames] = useState(
     match.teamAGames?.toString() || "",

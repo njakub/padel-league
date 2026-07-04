@@ -22,16 +22,28 @@ export type FixedPairs = [
 /**
  * Suggest the best 4 fixed pairs from 8 player IDs.
  *
- * @param playerIds      Exactly 8 player IDs to partition.
- * @param rankMap        playerId → rank (1 = top of standings, 8 = bottom).
- *                       Players not in the map default to rank 4 (mid-table).
- * @param pairingHistory "minId-maxId" → number of times those two players have
- *                       been paired as partners across all historical seasons.
+ * @param playerIds        Exactly 8 player IDs to partition.
+ * @param rankMap          playerId → rank (1 = top of standings, 8 = bottom).
+ *                         Players not in the map default to rank 4 (mid-table).
+ * @param pairingHistory   "minId-maxId" → number of times those two players
+ *                         have been paired as partners across all history.
+ * @param hardExcludePairs "minId-maxId" set of pairs already used *this
+ *                         season* — never suggested again until the season
+ *                         resets. Every round removes 4 disjoint pairs from
+ *                         the 28 possible pairs among 8 players; since K8 is
+ *                         7-regular, excluding up to 6 rounds' worth of
+ *                         disjoint pairs always still leaves at least one
+ *                         valid partition for the 7th (graph 1-factorization
+ *                         guarantee), so this never needs backtracking — if
+ *                         no partition survives the hard filter (e.g. bad
+ *                         input data), we fall back to the soft-scored pick
+ *                         rather than throwing.
  */
 export function suggestFixedPairs(
   playerIds: number[],
   rankMap: Map<number, number>,
   pairingHistory: Map<string, number>,
+  hardExcludePairs?: Set<string>,
 ): FixedPairs {
   if (playerIds.length !== 8) {
     throw new Error("suggestFixedPairs requires exactly 8 player IDs");
@@ -69,8 +81,15 @@ export function suggestFixedPairs(
     return score;
   }
 
+  function usesExcludedPair(partition: [number, number][]): boolean {
+    if (!hardExcludePairs || hardExcludePairs.size === 0) return false;
+    return partition.some(([a, b]) => hardExcludePairs.has(pairKey(a, b)));
+  }
+
   let bestPairs: [number, number][] | null = null;
   let bestScore = -Infinity;
+  let bestAllowedPairs: [number, number][] | null = null;
+  let bestAllowedScore = -Infinity;
 
   for (const partition of partitions(playerIds)) {
     const s = scorePartition(partition);
@@ -78,7 +97,11 @@ export function suggestFixedPairs(
       bestScore = s;
       bestPairs = partition;
     }
+    if (!usesExcludedPair(partition) && s > bestAllowedScore) {
+      bestAllowedScore = s;
+      bestAllowedPairs = partition;
+    }
   }
 
-  return bestPairs as FixedPairs;
+  return (bestAllowedPairs ?? bestPairs) as FixedPairs;
 }

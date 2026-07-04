@@ -1,22 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { completeSeason } from "@/app/actions";
+import { completeRound } from "@/app/actions";
 
-interface CompleteSeasonButtonProps {
-  seasonId: number;
+interface CompleteRoundButtonProps {
+  roundId: number;
 }
 
-export default function CompleteSeasonButton({
-  seasonId,
-}: CompleteSeasonButtonProps) {
+export default function CompleteRoundButton({
+  roundId,
+}: CompleteRoundButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleComplete = async () => {
     if (
       !confirm(
-        "Are you sure you want to mark this season as completed? This action cannot be undone.",
+        "Are you sure you want to mark this round as completed? This action cannot be undone.",
       )
     ) {
       return;
@@ -25,10 +25,10 @@ export default function CompleteSeasonButton({
     setIsLoading(true);
     setError(null);
 
-    const result = await completeSeason(seasonId);
+    const result = await completeRound(roundId);
 
     if (!result.success) {
-      setError(result.error || "Failed to complete season");
+      setError(result.error || "Failed to complete round");
       setIsLoading(false);
     }
   };

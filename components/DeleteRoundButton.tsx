@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { deleteSeason } from "@/app/actions";
+import { deleteRound } from "@/app/actions";
 
-interface DeleteSeasonButtonProps {
-  seasonId: number;
-  seasonName: string;
+interface DeleteRoundButtonProps {
+  roundId: number;
+  roundName: string;
+  redirectTo: string;
 }
 
-export default function DeleteSeasonButton({
-  seasonId,
-  seasonName,
-}: DeleteSeasonButtonProps) {
+export default function DeleteRoundButton({
+  roundId,
+  roundName,
+  redirectTo,
+}: DeleteRoundButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,12 +24,12 @@ export default function DeleteSeasonButton({
     setIsLoading(true);
     setError(null);
 
-    const result = await deleteSeason(seasonId);
+    const result = await deleteRound(roundId);
 
     if (result.success) {
-      router.push("/");
+      router.push(redirectTo);
     } else {
-      setError(result.error || "Failed to delete season");
+      setError(result.error || "Failed to delete round");
       setIsLoading(false);
     }
   };
@@ -38,14 +40,14 @@ export default function DeleteSeasonButton({
         onClick={() => setIsOpen(true)}
         className="px-4 py-2 border-2 border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors"
       >
-        Delete Season
+        Delete Round
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Delete Season?
+              Delete Round?
             </h3>
 
             {error && (
@@ -57,7 +59,7 @@ export default function DeleteSeasonButton({
             <div className="mb-6">
               <p className="text-gray-700 mb-2">
                 Are you sure you want to delete{" "}
-                <span className="font-semibold">{seasonName}</span>?
+                <span className="font-semibold">{roundName}</span>?
               </p>
               <p className="text-sm text-red-600 font-medium">
                 This will permanently delete all matches and results. This
@@ -82,7 +84,7 @@ export default function DeleteSeasonButton({
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isLoading}
               >
-                {isLoading ? "Deleting..." : "Delete Season"}
+                {isLoading ? "Deleting..." : "Delete Round"}
               </button>
             </div>
           </div>

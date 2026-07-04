@@ -5,6 +5,7 @@ import {
   calculatePlayerPoints,
   calculateMatchPoints,
   calculateStandings,
+  calculatePairingStats,
   type MatchWithPlayers,
 } from "./scoring";
 
@@ -435,6 +436,153 @@ describe("Americano scoring", () => {
       expect(alice.losses).toBe(0);
       expect(charlie.wins).toBe(0);
       expect(charlie.losses).toBe(0);
+    });
+  });
+
+  // Characterization test: locks the exact numbers a full Wednesday
+  // (americano, 4 fixed pairs) round produces today, before the
+  // League/Season/Round restructure touches this code path. If this
+  // test's expected values ever need to change, the restructure changed
+  // real scoring behavior, not just its plumbing.
+  describe("Wednesday round characterization (americano, 4 fixed pairs)", () => {
+    const players = new Map([
+      [1, "P1a"],
+      [2, "P1b"],
+      [3, "P2a"],
+      [4, "P2b"],
+      [5, "P3a"],
+      [6, "P3b"],
+      [7, "P4a"],
+      [8, "P4b"],
+    ]);
+
+    function makeMatch(
+      id: number,
+      a1: number,
+      a2: number,
+      b1: number,
+      b2: number,
+      aGames: number,
+      bGames: number,
+      winner: string,
+    ): MatchWithPlayers {
+      return {
+        id,
+        teamAPlayer1Id: a1,
+        teamAPlayer2Id: a2,
+        teamBPlayer1Id: b1,
+        teamBPlayer2Id: b2,
+        sitOutPlayerId: null,
+        teamAGames: aGames,
+        teamBGames: bGames,
+        winnerTeam: winner,
+      };
+    }
+
+    // Round-robin of 4 fixed pairs: (1,2) (3,4) (5,6) (7,8) — every pair
+    // faces every other pair once, 2 draws included.
+    const matches = [
+      makeMatch(1, 1, 2, 3, 4, 20, 12, "A"), // P1 beats P2
+      makeMatch(2, 5, 6, 7, 8, 16, 16, "DRAW"), // P3 draws P4
+      makeMatch(3, 1, 2, 5, 6, 18, 14, "A"), // P1 beats P3
+      makeMatch(4, 3, 4, 7, 8, 10, 22, "B"), // P4 beats P2
+      makeMatch(5, 1, 2, 7, 8, 15, 17, "B"), // P4 beats P1
+      makeMatch(6, 3, 4, 5, 6, 16, 16, "DRAW"), // P2 draws P3
+    ];
+
+    it("computes player standings matching hand-verified totals", () => {
+      const standings = calculateStandings(matches, players, "americano");
+      const byId = new Map(standings.map((s) => [s.playerId, s]));
+
+      expect(byId.get(1)).toMatchObject({
+        points: 53,
+        wins: 2,
+        losses: 1,
+        matchesPlayed: 3,
+        gamesFor: 53,
+        gamesAgainst: 43,
+      });
+      expect(byId.get(3)).toMatchObject({
+        points: 38,
+        wins: 0,
+        losses: 2,
+        matchesPlayed: 3,
+        gamesFor: 38,
+        gamesAgainst: 58,
+      });
+      expect(byId.get(5)).toMatchObject({
+        points: 46,
+        wins: 0,
+        losses: 1,
+        matchesPlayed: 3,
+        gamesFor: 46,
+        gamesAgainst: 50,
+      });
+      expect(byId.get(7)).toMatchObject({
+        points: 55,
+        wins: 2,
+        losses: 0,
+        matchesPlayed: 3,
+        gamesFor: 55,
+        gamesAgainst: 41,
+      });
+
+      // Total points conserved: each match's 32 points are credited to
+      // both players on each team (no bonus in americano), so every
+      // match contributes 2x32=64 total across all 8 players.
+      const totalPoints = standings.reduce((sum, s) => sum + s.points, 0);
+      expect(totalPoints).toBe(6 * 64);
+
+      // Ranking order: P4 > P1 > P3 > P2
+      expect(standings.map((s) => s.playerId)).toEqual([7, 8, 1, 2, 5, 6, 3, 4]);
+    });
+
+    it("computes pair standings matching hand-verified totals and ranking", () => {
+      const pairings = calculatePairingStats(matches, players, "americano");
+      const byPair = new Map(
+        pairings.map((p) => [`${p.player1Id}-${p.player2Id}`, p]),
+      );
+
+      expect(byPair.get("1-2")).toMatchObject({
+        matchesPlayed: 3,
+        wins: 2,
+        losses: 1,
+        gamesFor: 53,
+        gamesAgainst: 43,
+        winRate: 67,
+      });
+      expect(byPair.get("3-4")).toMatchObject({
+        matchesPlayed: 3,
+        wins: 0,
+        losses: 2,
+        gamesFor: 38,
+        gamesAgainst: 58,
+        winRate: 0,
+      });
+      expect(byPair.get("5-6")).toMatchObject({
+        matchesPlayed: 3,
+        wins: 0,
+        losses: 1,
+        gamesFor: 46,
+        gamesAgainst: 50,
+        winRate: 0,
+      });
+      expect(byPair.get("7-8")).toMatchObject({
+        matchesPlayed: 3,
+        wins: 2,
+        losses: 0,
+        gamesFor: 55,
+        gamesAgainst: 41,
+        winRate: 67,
+      });
+
+      // Ranking: winRate desc, then wins, then gamesFor -> P4, P1, P3, P2
+      expect(pairings.map((p) => `${p.player1Id}-${p.player2Id}`)).toEqual([
+        "7-8",
+        "1-2",
+        "5-6",
+        "3-4",
+      ]);
     });
   });
 });
