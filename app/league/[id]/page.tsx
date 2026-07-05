@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
+import {
+  calculateStandings,
+  calculatePairingStats,
+  calculatePlacementStandings,
+} from "@/lib/scoring";
 import { getFormat } from "@/lib/formats";
 import StandingsTable from "@/components/StandingsTable";
+import PlacementStandingsTable from "@/components/PlacementStandingsTable";
 import PairingsTable from "@/components/PairingsTable";
 import CreateRoundButton from "@/components/CreateRoundButton";
+import CreateRoundPlayersButton from "@/components/CreateRoundPlayersButton";
 import CompleteSeasonEarlyButton from "@/components/CompleteSeasonEarlyButton";
 
 async function getLeague(id: number) {
@@ -46,6 +52,17 @@ export default async function LeaguePage({
     playerMap,
     format.scoringStyle,
   ).filter((s) => s.matchesPlayed > 0);
+  const placementTally =
+    format.seasonScoring === "placement"
+      ? calculatePlacementStandings(
+          completedRounds.map(
+            (r) =>
+              r.matches as Parameters<typeof calculatePlacementStandings>[0][number],
+          ),
+          playerMap,
+          format.scoringStyle,
+        )
+      : null;
   const pairings = calculatePairingStats(
     allTimeMatches as Parameters<typeof calculatePairingStats>[0],
     playerMap,
@@ -98,12 +115,22 @@ export default async function LeaguePage({
         ) : (
           <div className="text-center py-4">
             <p className="text-gray-600 mb-4">No active round.</p>
-            <CreateRoundButton
-              leagueId={league.id}
-              leagueName={league.name}
-              roundLengths={format.roundLengths}
-              players={players.map((p) => ({ id: p.id, name: p.name }))}
-            />
+            {format.roster.kind === "pick-pairs" ? (
+              <CreateRoundButton
+                leagueId={league.id}
+                leagueName={league.name}
+                roundLengths={format.roundLengths}
+                players={players.map((p) => ({ id: p.id, name: p.name }))}
+              />
+            ) : (
+              <CreateRoundPlayersButton
+                leagueId={league.id}
+                leagueName={league.name}
+                roundLengths={format.roundLengths}
+                rosterSize={format.roster.size}
+                players={players.map((p) => ({ id: p.id, name: p.name }))}
+              />
+            )}
           </div>
         )}
 
@@ -120,15 +147,21 @@ export default async function LeaguePage({
       </div>
 
       {/* All-time tally */}
-      {tally.length > 0 && (
+      {(placementTally ? placementTally.length : tally.length) > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-1">
             All-Time Tally
           </h2>
           <p className="text-sm text-gray-600 mb-4">
             Across {completedRounds.length} completed round(s)
+            {placementTally &&
+              ` — placement points (1st = ${format.roster.size} pts … last = 1, absent = 0)`}
           </p>
-          <StandingsTable standings={tally} />
+          {placementTally ? (
+            <PlacementStandingsTable standings={placementTally} />
+          ) : (
+            <StandingsTable standings={tally} />
+          )}
           {format.roundStandings === "pairs" && (
             <PairingsTable
               pairings={pairings}
@@ -153,11 +186,24 @@ export default async function LeaguePage({
               );
               const champion =
                 season.status === "COMPLETED"
-                  ? calculateStandings(
-                      seasonMatches as Parameters<typeof calculateStandings>[0],
-                      playerMap,
-                      format.scoringStyle,
-                    ).filter((s) => s.matchesPlayed > 0)[0]
+                  ? format.seasonScoring === "placement"
+                    ? calculatePlacementStandings(
+                        seasonCompletedRounds.map(
+                          (r) =>
+                            r.matches as Parameters<
+                              typeof calculatePlacementStandings
+                            >[0][number],
+                        ),
+                        playerMap,
+                        format.scoringStyle,
+                      )[0]
+                    : calculateStandings(
+                        seasonMatches as Parameters<
+                          typeof calculateStandings
+                        >[0],
+                        playerMap,
+                        format.scoringStyle,
+                      ).filter((s) => s.matchesPlayed > 0)[0]
                   : null;
 
               return (

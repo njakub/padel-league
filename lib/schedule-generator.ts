@@ -57,6 +57,40 @@ function generateBase15Matches(): MatchConfig[] {
 }
 
 /**
+ * Generate one balanced single-session cycle for 5 players:
+ *   - every player sits out exactly once
+ *   - every pair of players teams up exactly once (all 10 pairs covered)
+ *   - every player faces every other player exactly twice
+ *
+ * Construction: in match r (0-4), player r sits out and the teams are
+ * {r+1, r+4} vs {r+2, r+3} (mod 5). Across the 5 matches this uses each
+ * of the 10 edges of K5 as a partnership exactly once.
+ *
+ * totalMatches 10 repeats the cycle (every pair partners exactly twice).
+ */
+export function generateCycleSchedule(totalMatches: 5 | 10): MatchConfig[] {
+  if (![5, 10].includes(totalMatches)) {
+    throw new Error("Total matches must be 5 or 10");
+  }
+
+  const base: MatchConfig[] = [];
+  for (let r = 0; r < 5; r++) {
+    base.push({
+      matchNumber: r + 1,
+      sitOut: r,
+      teamA: [(r + 1) % 5, (r + 4) % 5],
+      teamB: [(r + 2) % 5, (r + 3) % 5],
+    });
+  }
+
+  if (totalMatches === 5) return base;
+  return [
+    ...base,
+    ...base.map((m) => ({ ...m, matchNumber: m.matchNumber + 5 })),
+  ];
+}
+
+/**
  * Generate schedule for a season
  * @param totalMatches Must be 15, 30, 45, or 60
  * @returns Array of match configurations

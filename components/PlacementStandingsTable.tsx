@@ -1,12 +1,9 @@
-import type { PlayerStats } from "@/lib/scoring";
+import type { PlacementStanding } from "@/lib/scoring";
 
-export default function StandingsTable({
+export default function PlacementStandingsTable({
   standings,
-  leaguePoints,
 }: {
-  standings: PlayerStats[];
-  /** Placement formats: league points earned per player this round. */
-  leaguePoints?: Record<number, number>;
+  standings: PlacementStanding[];
 }) {
   return (
     <div className="overflow-x-auto">
@@ -23,7 +20,10 @@ export default function StandingsTable({
               Points
             </th>
             <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Played
+              Rounds
+            </th>
+            <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              🥇
             </th>
             <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
               W-L
@@ -31,11 +31,6 @@ export default function StandingsTable({
             <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
               Games
             </th>
-            {leaguePoints && (
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                League Pts
-              </th>
-            )}
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -52,10 +47,13 @@ export default function StandingsTable({
                 {stat.playerName}
               </td>
               <td className="px-2 py-1.5 whitespace-nowrap text-sm font-bold text-gray-900 text-center">
-                {stat.points}
+                {stat.placementPoints}
               </td>
               <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
-                {stat.matchesPlayed}
+                {stat.roundsPlayed}
+              </td>
+              <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
+                {stat.firsts}
               </td>
               <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
                 {stat.wins}-{stat.losses}
@@ -63,11 +61,6 @@ export default function StandingsTable({
               <td className="px-2 py-1.5 whitespace-nowrap text-sm text-gray-600 text-center">
                 {stat.gamesFor}-{stat.gamesAgainst}
               </td>
-              {leaguePoints && (
-                <td className="px-2 py-1.5 whitespace-nowrap text-sm font-semibold text-purple-700 text-center">
-                  +{leaguePoints[stat.playerId] ?? 0}
-                </td>
-              )}
             </tr>
           ))}
         </tbody>

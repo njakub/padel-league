@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   generateSchedule,
+  generateCycleSchedule,
   verifyScheduleBalance,
   mapToPlayerIds,
 } from "./schedule-generator";
@@ -174,6 +175,86 @@ describe("Schedule Generator", () => {
 
       expect(() => mapToPlayerIds(schedule, [1, 2, 3, 4])).toThrow();
       expect(() => mapToPlayerIds(schedule, [1, 2, 3, 4, 5, 6])).toThrow();
+    });
+  });
+
+  describe("generateCycleSchedule (5-player single session)", () => {
+    const pairKey = (a: number, b: number) =>
+      a < b ? `${a}-${b}` : `${b}-${a}`;
+
+    it("generates 5 matches with contiguous match numbers", () => {
+      const cycle = generateCycleSchedule(5);
+      expect(cycle).toHaveLength(5);
+      cycle.forEach((m, i) => expect(m.matchNumber).toBe(i + 1));
+    });
+
+    it("throws for lengths other than 5 or 10", () => {
+      expect(() => generateCycleSchedule(15 as unknown as 5)).toThrow();
+      expect(() => generateCycleSchedule(4 as unknown as 5)).toThrow();
+    });
+
+    it("every player sits out exactly once", () => {
+      const sitOuts = generateCycleSchedule(5).map((m) => m.sitOut);
+      expect([...sitOuts].sort()).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it("the sit-out player is never on court in their match", () => {
+      for (const m of generateCycleSchedule(5)) {
+        expect([...m.teamA, ...m.teamB]).not.toContain(m.sitOut);
+        expect(new Set([...m.teamA, ...m.teamB]).size).toBe(4);
+      }
+    });
+
+    it("every pair of players partners exactly once (all 10 pairs)", () => {
+      const counts = new Map<string, number>();
+      for (const m of generateCycleSchedule(5)) {
+        counts.set(pairKey(...m.teamA), (counts.get(pairKey(...m.teamA)) ?? 0) + 1);
+        counts.set(pairKey(...m.teamB), (counts.get(pairKey(...m.teamB)) ?? 0) + 1);
+      }
+      expect(counts.size).toBe(10);
+      for (const count of counts.values()) expect(count).toBe(1);
+    });
+
+    it("every player faces every other player exactly twice", () => {
+      const counts = new Map<string, number>();
+      for (const m of generateCycleSchedule(5)) {
+        for (const a of m.teamA) {
+          for (const b of m.teamB) {
+            counts.set(pairKey(a, b), (counts.get(pairKey(a, b)) ?? 0) + 1);
+          }
+        }
+      }
+      expect(counts.size).toBe(10);
+      for (const count of counts.values()) expect(count).toBe(2);
+    });
+
+    it("10-match variant repeats the cycle with continued numbering", () => {
+      const double = generateCycleSchedule(10);
+      expect(double).toHaveLength(10);
+      double.forEach((m, i) => expect(m.matchNumber).toBe(i + 1));
+
+      const counts = new Map<string, number>();
+      for (const m of double) {
+        counts.set(pairKey(...m.teamA), (counts.get(pairKey(...m.teamA)) ?? 0) + 1);
+        counts.set(pairKey(...m.teamB), (counts.get(pairKey(...m.teamB)) ?? 0) + 1);
+      }
+      expect(counts.size).toBe(10);
+      for (const count of counts.values()) expect(count).toBe(2);
+    });
+
+    it("passes the generic balance verifier", () => {
+      const { isBalanced, issues } = verifyScheduleBalance(
+        generateCycleSchedule(5),
+      );
+      expect(issues).toEqual([]);
+      expect(isBalanced).toBe(true);
+    });
+
+    it("maps to player IDs via mapToPlayerIds", () => {
+      const mapped = mapToPlayerIds(generateCycleSchedule(5), [10, 20, 30, 40, 50]);
+      expect(mapped).toHaveLength(5);
+      const sitOuts = mapped.map((m) => m.sitOutPlayerId).sort((a, b) => a - b);
+      expect(sitOuts).toEqual([10, 20, 30, 40, 50]);
     });
   });
 });

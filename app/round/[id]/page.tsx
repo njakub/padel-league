@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
+import {
+  calculateStandings,
+  calculatePairingStats,
+  calculateRoundPlacements,
+} from "@/lib/scoring";
 import { getFormat } from "@/lib/formats";
 import CompleteRoundButton from "@/components/CompleteRoundButton";
 import DeleteRoundButton from "@/components/DeleteRoundButton";
@@ -52,11 +56,35 @@ export default async function RoundPage({
     playerMap,
     format.scoringStyle,
   );
+  // Restrict standings to the round's roster (calculateStandings initializes
+  // every player it's given, including ones not in this round).
+  const rosterIds = new Set(
+    round.matches.flatMap((m) => [
+      m.teamAPlayer1Id,
+      m.teamAPlayer2Id,
+      m.teamBPlayer1Id,
+      m.teamBPlayer2Id,
+      ...(m.sitOutPlayerId !== null ? [m.sitOutPlayerId] : []),
+    ]),
+  );
   const standings = calculateStandings(
     round.matches as Parameters<typeof calculateStandings>[0],
     playerMap,
     format.scoringStyle,
-  );
+  ).filter((s) => rosterIds.has(s.playerId));
+
+  // Placement formats: once the round is done, show the league points each
+  // finishing position earned (1st = N participants … last = 1).
+  const leaguePoints =
+    format.seasonScoring === "placement" && round.status === "COMPLETED"
+      ? Object.fromEntries(
+          calculateRoundPlacements(
+            round.matches as Parameters<typeof calculateRoundPlacements>[0],
+            playerMap,
+            format.scoringStyle,
+          ).map((p) => [p.playerId, p.placementPoints]),
+        )
+      : undefined;
 
   const completedMatches = round.matches.filter((m) => m.winnerTeam !== null);
   const progress = {
@@ -136,7 +164,7 @@ export default async function RoundPage({
         {format.roundStandings === "pairs" ? (
           <PairStandingsTable pairings={pairings} />
         ) : (
-          <StandingsTable standings={standings} />
+          <StandingsTable standings={standings} leaguePoints={leaguePoints} />
         )}
       </div>
 

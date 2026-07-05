@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { calculateStandings, calculatePairingStats } from "@/lib/scoring";
+import {
+  calculateStandings,
+  calculatePairingStats,
+  calculatePlacementStandings,
+} from "@/lib/scoring";
 import { getFormat } from "@/lib/formats";
 import StandingsTable from "@/components/StandingsTable";
+import PlacementStandingsTable from "@/components/PlacementStandingsTable";
 
 async function getSeason(leagueId: number, number: number) {
   return prisma.leagueSeason.findUnique({
@@ -43,6 +48,17 @@ export default async function SeasonPage({
     playerMap,
     format.scoringStyle,
   ).filter((s) => s.matchesPlayed > 0);
+  const placementStandings =
+    format.seasonScoring === "placement"
+      ? calculatePlacementStandings(
+          completedRounds.map(
+            (r) =>
+              r.matches as Parameters<typeof calculatePlacementStandings>[0][number],
+          ),
+          playerMap,
+          format.scoringStyle,
+        )
+      : null;
 
   // Partner coverage: distinct pairs used across every round in the season
   // (a round's fixed pairs are committed as soon as it's created, regardless
@@ -61,7 +77,10 @@ export default async function SeasonPage({
       ? (format.roster.size * (format.roster.size - 1)) / 2
       : null;
 
-  const champion = season.status === "COMPLETED" ? standings[0] : null;
+  const champion =
+    season.status === "COMPLETED"
+      ? (placementStandings ?? standings)[0]
+      : null;
 
   return (
     <div className="space-y-6">
@@ -98,12 +117,24 @@ export default async function SeasonPage({
         )}
       </div>
 
-      {standings.length > 0 && (
+      {(placementStandings ?? standings).length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">
             Season Standings
           </h2>
-          <StandingsTable standings={standings} />
+          {placementStandings ? (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Placement points per round: 1st = {format.roster.size} pts …
+                last = 1, absent = 0
+              </p>
+              <PlacementStandingsTable standings={placementStandings} />
+            </>
+          ) : (
+            <div className="mt-3">
+              <StandingsTable standings={standings} />
+            </div>
+          )}
         </div>
       )}
 
@@ -112,17 +143,28 @@ export default async function SeasonPage({
         <div className="space-y-3">
           {season.rounds.map((round) => {
             const roundCompleted = round.status === "COMPLETED";
-            const winningPair = roundCompleted
-              ? calculatePairingStats(
-                  round.matches as Parameters<typeof calculatePairingStats>[0],
-                  playerMap,
-                  format.scoringStyle,
-                ).sort((a, b) =>
-                  b.gamesFor !== a.gamesFor
-                    ? b.gamesFor - a.gamesFor
-                    : b.wins - a.wins,
-                )[0]
-              : null;
+            const winningPair =
+              roundCompleted && format.roundStandings === "pairs"
+                ? calculatePairingStats(
+                    round.matches as Parameters<
+                      typeof calculatePairingStats
+                    >[0],
+                    playerMap,
+                    format.scoringStyle,
+                  ).sort((a, b) =>
+                    b.gamesFor !== a.gamesFor
+                      ? b.gamesFor - a.gamesFor
+                      : b.wins - a.wins,
+                  )[0]
+                : null;
+            const winningPlayer =
+              roundCompleted && format.roundStandings === "players"
+                ? calculateStandings(
+                    round.matches as Parameters<typeof calculateStandings>[0],
+                    playerMap,
+                    format.scoringStyle,
+                  ).filter((s) => s.matchesPlayed > 0)[0]
+                : null;
 
             return (
               <Link
@@ -149,6 +191,11 @@ export default async function SeasonPage({
                   {winningPair && (
                     <div className="text-sm font-medium text-gray-900">
                       🥇 {winningPair.player1Name} & {winningPair.player2Name}
+                    </div>
+                  )}
+                  {winningPlayer && (
+                    <div className="text-sm font-medium text-gray-900">
+                      🥇 {winningPlayer.playerName}
                     </div>
                   )}
                 </div>

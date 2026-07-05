@@ -251,17 +251,21 @@ export async function createLeague(name: string, formatId: string) {
 /**
  * Create a new Round in a League: finds or opens the League's current
  * ACTIVE Season and appends the round to it, generating the schedule via
- * the League's format descriptor.
+ * the League's format descriptor. The roster payload matches the format's
+ * roster kind: `pairs` for pick-pairs formats, `playerIds` for pick-players.
  */
 export async function createRound(
   leagueId: number,
   totalMatches: number,
-  pairs: [
-    [number, number],
-    [number, number],
-    [number, number],
-    [number, number],
-  ],
+  roster: {
+    pairs?: [
+      [number, number],
+      [number, number],
+      [number, number],
+      [number, number],
+    ];
+    playerIds?: number[];
+  },
   name?: string,
 ) {
   try {
@@ -270,18 +274,35 @@ export async function createRound(
       return { success: false, error: "League not found." };
     }
     const format = getFormat(league.format);
-    if (format.roster.kind !== "pick-pairs") {
+    if (!format.roundLengths.includes(totalMatches)) {
       return {
         success: false,
-        error: `Round creation for format "${format.id}" isn't supported yet.`,
+        error: `Round length must be one of: ${format.roundLengths.join(", ")}.`,
       };
     }
 
-    const allPlayerIds = pairs.flat();
-    if (new Set(allPlayerIds).size !== format.roster.size) {
+    let allPlayerIds: number[];
+    if (format.roster.kind === "pick-pairs") {
+      if (!roster.pairs) {
+        return { success: false, error: "This format requires 4 fixed pairs." };
+      }
+      allPlayerIds = roster.pairs.flat();
+    } else {
+      if (!roster.playerIds) {
+        return {
+          success: false,
+          error: "This format requires a list of players.",
+        };
+      }
+      allPlayerIds = roster.playerIds;
+    }
+    if (
+      allPlayerIds.length !== format.roster.size ||
+      new Set(allPlayerIds).size !== format.roster.size
+    ) {
       return {
         success: false,
-        error: `All ${format.roster.size} players across the pairs must be different.`,
+        error: `Exactly ${format.roster.size} different players are required.`,
       };
     }
 
@@ -323,7 +344,7 @@ export async function createRound(
     }
 
     const roundNumber = season.rounds.length + 1;
-    const matchesData = format.buildSchedule(totalMatches, { pairs });
+    const matchesData = format.buildSchedule(totalMatches, roster);
     const roundName = name || `Round ${roundNumber}`;
 
     const round = await prisma.round.create({

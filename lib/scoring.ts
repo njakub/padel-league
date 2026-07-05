@@ -201,6 +201,103 @@ export function calculateStandings(
   });
 }
 
+// ===== Placement scoring (individual-rotation formats) =====
+
+export interface RoundPlacement extends PlayerStats {
+  /** Competition ranking: tied players share a rank (1, 2, 2, 4). */
+  rank: number;
+  /** League points for this round: N participants → 1st = N pts … last = 1. */
+  placementPoints: number;
+}
+
+/**
+ * Rank one round's participants and convert finishing position to league
+ * points. Players tied on the full sort key (points, wins, gamesFor) share
+ * the higher rank and its points; the following rank is skipped.
+ */
+export function calculateRoundPlacements(
+  matches: MatchWithPlayers[],
+  players: Map<number, string>,
+  style: ScoringStyle = "standard",
+): RoundPlacement[] {
+  const stats = calculateStandings(matches, players, style).filter(
+    (s) => s.matchesPlayed > 0,
+  );
+  const participants = stats.length;
+
+  const placements: RoundPlacement[] = [];
+  for (let i = 0; i < stats.length; i++) {
+    const s = stats[i];
+    const prev = i > 0 ? stats[i - 1] : null;
+    const tiedWithPrev =
+      prev !== null &&
+      prev.points === s.points &&
+      prev.wins === s.wins &&
+      prev.gamesFor === s.gamesFor;
+    const rank = tiedWithPrev ? placements[i - 1].rank : i + 1;
+    placements.push({ ...s, rank, placementPoints: participants + 1 - rank });
+  }
+  return placements;
+}
+
+export interface PlacementStanding {
+  playerId: number;
+  playerName: string;
+  roundsPlayed: number;
+  /** Rounds finished in 1st place (shared 1sts count for everyone tied). */
+  firsts: number;
+  wins: number;
+  losses: number;
+  gamesFor: number;
+  gamesAgainst: number;
+  placementPoints: number;
+}
+
+/**
+ * Season/all-time table for placement-scored formats: sums placement points
+ * over each completed round (one MatchWithPlayers[] per round). A player
+ * absent from a round simply earns nothing for it.
+ */
+export function calculatePlacementStandings(
+  roundsMatches: MatchWithPlayers[][],
+  players: Map<number, string>,
+  style: ScoringStyle = "standard",
+): PlacementStanding[] {
+  const table = new Map<number, PlacementStanding>();
+
+  for (const matches of roundsMatches) {
+    for (const p of calculateRoundPlacements(matches, players, style)) {
+      const row = table.get(p.playerId) ?? {
+        playerId: p.playerId,
+        playerName: p.playerName,
+        roundsPlayed: 0,
+        firsts: 0,
+        wins: 0,
+        losses: 0,
+        gamesFor: 0,
+        gamesAgainst: 0,
+        placementPoints: 0,
+      };
+      row.roundsPlayed++;
+      if (p.rank === 1) row.firsts++;
+      row.wins += p.wins;
+      row.losses += p.losses;
+      row.gamesFor += p.gamesFor;
+      row.gamesAgainst += p.gamesAgainst;
+      row.placementPoints += p.placementPoints;
+      table.set(p.playerId, row);
+    }
+  }
+
+  return Array.from(table.values()).sort((a, b) => {
+    if (b.placementPoints !== a.placementPoints)
+      return b.placementPoints - a.placementPoints;
+    if (b.firsts !== a.firsts) return b.firsts - a.firsts;
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    return b.gamesFor - a.gamesFor;
+  });
+}
+
 export interface PairingStats {
   player1Id: number;
   player1Name: string;

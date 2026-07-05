@@ -6,6 +6,8 @@ import {
   calculateMatchPoints,
   calculateStandings,
   calculatePairingStats,
+  calculateRoundPlacements,
+  calculatePlacementStandings,
   type MatchWithPlayers,
 } from "./scoring";
 
@@ -583,6 +585,124 @@ describe("Americano scoring", () => {
         "5-6",
         "3-4",
       ]);
+    });
+  });
+});
+
+describe("Placement scoring (rotation formats)", () => {
+  const players = new Map([
+    [1, "Alice"],
+    [2, "Bob"],
+    [3, "Charlie"],
+    [4, "Dave"],
+    [5, "Eve"],
+  ]);
+
+  let nextId = 1;
+  const match = (
+    teamA: [number, number],
+    teamB: [number, number],
+    teamAGames: number,
+    teamBGames: number,
+    sitOutPlayerId: number | null = null,
+  ): MatchWithPlayers => ({
+    id: nextId++,
+    teamAPlayer1Id: teamA[0],
+    teamAPlayer2Id: teamA[1],
+    teamBPlayer1Id: teamB[0],
+    teamBPlayer2Id: teamB[1],
+    sitOutPlayerId,
+    teamAGames,
+    teamBGames,
+    winnerTeam: teamAGames > teamBGames ? "A" : "B",
+  });
+
+  // One full 5-player cycle. Standard points (games + win bonus):
+  //   Bob 20 (4W), Alice 15, Charlie 13, Dave 10, Eve 10
+  // Dave and Eve tie on the full sort key (10 pts, 1 win, 9 gamesFor).
+  const fullCycle = (): MatchWithPlayers[] => [
+    match([2, 5], [3, 4], 4, 2, 1),
+    match([3, 1], [4, 5], 4, 1, 2),
+    match([4, 2], [5, 1], 4, 3, 3),
+    match([5, 3], [1, 2], 1, 4, 4),
+    match([1, 4], [2, 3], 2, 4, 5),
+  ];
+
+  // A 4-player round (Eve absent): Alice 15, Bob 8, Dave 7, Charlie 6.
+  const fourPlayerRound = (): MatchWithPlayers[] => [
+    match([1, 2], [3, 4], 4, 0),
+    match([1, 3], [2, 4], 4, 2),
+    match([1, 4], [2, 3], 4, 1),
+  ];
+
+  describe("calculateRoundPlacements", () => {
+    it("converts finishing position to points (1st = N participants … last = 1)", () => {
+      const placements = calculateRoundPlacements(fullCycle(), players);
+
+      expect(placements.map((p) => p.playerId)).toEqual([2, 1, 3, 4, 5]);
+      expect(placements.map((p) => p.rank)).toEqual([1, 2, 3, 4, 4]);
+      expect(placements.map((p) => p.placementPoints)).toEqual([5, 4, 3, 2, 2]);
+    });
+
+    it("fully tied players share the higher rank and its points", () => {
+      const placements = calculateRoundPlacements(fullCycle(), players);
+      const dave = placements.find((p) => p.playerId === 4)!;
+      const eve = placements.find((p) => p.playerId === 5)!;
+
+      expect(dave.rank).toBe(4);
+      expect(eve.rank).toBe(4);
+      expect(dave.placementPoints).toBe(2);
+      expect(eve.placementPoints).toBe(2);
+    });
+
+    it("scales to the number of participants (4-player round: 1st = 4 pts)", () => {
+      const placements = calculateRoundPlacements(fourPlayerRound(), players);
+
+      expect(placements).toHaveLength(4);
+      expect(placements.map((p) => p.playerId)).toEqual([1, 2, 4, 3]);
+      expect(placements.map((p) => p.placementPoints)).toEqual([4, 3, 2, 1]);
+      expect(placements.some((p) => p.playerId === 5)).toBe(false);
+    });
+
+    it("returns an empty list when no matches have results", () => {
+      expect(calculateRoundPlacements([], players)).toEqual([]);
+    });
+  });
+
+  describe("calculatePlacementStandings", () => {
+    it("sums placement points across rounds; absentees earn nothing", () => {
+      const standings = calculatePlacementStandings(
+        [fullCycle(), fourPlayerRound()],
+        players,
+      );
+
+      const byId = new Map(standings.map((s) => [s.playerId, s]));
+      expect(byId.get(1)!.placementPoints).toBe(8); // 4 + 4
+      expect(byId.get(2)!.placementPoints).toBe(8); // 5 + 3
+      expect(byId.get(3)!.placementPoints).toBe(4); // 3 + 1
+      expect(byId.get(4)!.placementPoints).toBe(4); // 2 + 2
+      expect(byId.get(5)!.placementPoints).toBe(2); // 2 + absent
+
+      expect(byId.get(1)!.roundsPlayed).toBe(2);
+      expect(byId.get(5)!.roundsPlayed).toBe(1);
+      expect(byId.get(1)!.firsts).toBe(1);
+      expect(byId.get(2)!.firsts).toBe(1);
+    });
+
+    it("breaks placement-point ties by firsts, then wins, then gamesFor", () => {
+      const standings = calculatePlacementStandings(
+        [fullCycle(), fourPlayerRound()],
+        players,
+      );
+
+      // Alice and Bob both have 8 pts, 1 first, 5 wins — Alice leads on
+      // gamesFor (25 vs 23). Charlie and Dave both have 4 pts, 0 firsts —
+      // Charlie leads on wins (3 vs 2).
+      expect(standings.map((s) => s.playerId)).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    it("returns an empty table for no rounds", () => {
+      expect(calculatePlacementStandings([], players)).toEqual([]);
     });
   });
 });

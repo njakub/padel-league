@@ -1,36 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { createRound, createPlayer, suggestWednesdayPairs } from "@/app/actions";
-
-type FixedPairs = [
-  [number, number],
-  [number, number],
-  [number, number],
-  [number, number],
-];
+import { createRound, createPlayer } from "@/app/actions";
 
 interface Props {
   leagueId: number;
   leagueName: string;
   roundLengths: number[];
+  rosterSize: number;
   players: { id: number; name: string }[];
 }
 
-export default function CreateRoundButton({
+/**
+ * Create-round modal for pick-players formats (e.g. 5-player rotation):
+ * no pair assignment — just pick exactly `rosterSize` players and the
+ * schedule generator handles sit-outs and partner rotation.
+ */
+export default function CreateRoundPlayersButton({
   leagueId,
   leagueName,
   roundLengths,
+  rosterSize,
   players: initialPlayers,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [totalMatches, setTotalMatches] = useState<number>(roundLengths[0]);
   const [roundName, setRoundName] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [pairs, setPairs] = useState<FixedPairs | null>(null);
-  const [swapTarget, setSwapTarget] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuggesting, setIsSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Local player pool (starts from DB; grows when a new player is added)
@@ -41,19 +38,6 @@ export default function CreateRoundButton({
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
 
-  // Quick name lookup
-  const playerById = new Map(playerPool.map((p) => [p.id, p.name]));
-
-  /** Build default pairs from the first 8 selected IDs in insertion order. */
-  function makeDefaultPairs(ids: number[]): FixedPairs {
-    return [
-      [ids[0], ids[1]],
-      [ids[2], ids[3]],
-      [ids[4], ids[5]],
-      [ids[6], ids[7]],
-    ];
-  }
-
   const togglePlayer = (id: number) => {
     const newIds = new Set(selectedIds);
     if (newIds.has(id)) {
@@ -61,54 +45,7 @@ export default function CreateRoundButton({
     } else {
       newIds.add(id);
     }
-
-    const arr = Array.from(newIds);
-    if (arr.length === 8) {
-      setPairs(makeDefaultPairs(arr));
-    } else {
-      setPairs(null);
-      setSwapTarget(null);
-    }
-
     setSelectedIds(newIds);
-  };
-
-  /** Swap two players between pairs when user click-selects them. */
-  const handlePlayerClick = (playerId: number) => {
-    if (isLoading || isSuggesting) return;
-    if (swapTarget === null) {
-      setSwapTarget(playerId);
-      return;
-    }
-    if (swapTarget === playerId) {
-      setSwapTarget(null);
-      return;
-    }
-    if (pairs) {
-      const newPairs = pairs.map(([a, b]): [number, number] => {
-        if (a === swapTarget) return [playerId, b];
-        if (b === swapTarget) return [a, playerId];
-        if (a === playerId) return [swapTarget, b];
-        if (b === playerId) return [a, swapTarget];
-        return [a, b];
-      }) as FixedPairs;
-      setPairs(newPairs);
-    }
-    setSwapTarget(null);
-  };
-
-  const handleSuggestPairs = async () => {
-    if (selectedIds.size !== 8) return;
-    setIsSuggesting(true);
-    setError(null);
-    const ids = Array.from(selectedIds);
-    const result = await suggestWednesdayPairs(ids);
-    if (result.success) {
-      setPairs(result.pairs as FixedPairs);
-    } else {
-      setError(result.error ?? "Failed to suggest pairs.");
-    }
-    setIsSuggesting(false);
   };
 
   const handleAddNewPlayer = async () => {
@@ -142,8 +79,6 @@ export default function CreateRoundButton({
     setTotalMatches(roundLengths[0]);
     setNewPlayerName("");
     setAddPlayerError(null);
-    setPairs(null);
-    setSwapTarget(null);
     setPlayerPool(initialPlayers);
   };
 
@@ -154,18 +89,12 @@ export default function CreateRoundButton({
     setRoundName("");
     setNewPlayerName("");
     setAddPlayerError(null);
-    setPairs(null);
-    setSwapTarget(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedIds.size !== 8) {
-      setError("You must select exactly 8 players.");
-      return;
-    }
-    if (!pairs) {
-      setError("Please assign or suggest pairs before creating the round.");
+    if (selectedIds.size !== rosterSize) {
+      setError(`You must select exactly ${rosterSize} players.`);
       return;
     }
     setIsLoading(true);
@@ -174,7 +103,7 @@ export default function CreateRoundButton({
     const result = await createRound(
       leagueId,
       totalMatches,
-      { pairs },
+      { playerIds: Array.from(selectedIds) },
       roundName || undefined,
     );
 
@@ -203,7 +132,8 @@ export default function CreateRoundButton({
               Create Round — {leagueName}
             </h2>
             <p className="text-sm text-gray-500 mb-4">
-              8 players · 4 fixed pairs · 2 courts · no sit-outs
+              {rosterSize} players · 1 court · everyone partners everyone ·
+              everyone sits out once per cycle
             </p>
 
             {error && (
@@ -240,7 +170,7 @@ export default function CreateRoundButton({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Round Length
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {roundLengths.map((option) => (
                     <button
                       key={option}
@@ -257,14 +187,16 @@ export default function CreateRoundButton({
                         {option} matches
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {option / 2} sessions
+                        {option === roundLengths[0]
+                          ? "1 cycle · ~90 min"
+                          : `${option / roundLengths[0]} cycles`}
                       </div>
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Each session = 2 simultaneous matches · all pair matchups
-                  covered once per 6-match cycle
+                  Each cycle: everyone partners everyone once · everyone sits
+                  out once · first to 4 games per match
                 </p>
               </div>
 
@@ -274,20 +206,20 @@ export default function CreateRoundButton({
                   Select Players{" "}
                   <span
                     className={`font-semibold ${
-                      selectedIds.size === 8
+                      selectedIds.size === rosterSize
                         ? "text-green-600"
-                        : selectedIds.size > 8
+                        : selectedIds.size > rosterSize
                           ? "text-red-600"
                           : "text-purple-600"
                     }`}
                   >
-                    ({selectedIds.size}/8 selected)
+                    ({selectedIds.size}/{rosterSize} selected)
                   </span>
                 </label>
                 <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto border border-gray-200 rounded-md p-2">
                   {playerPool.map((player) => {
                     const checked = selectedIds.has(player.id);
-                    const atMax = !checked && selectedIds.size >= 8;
+                    const atMax = !checked && selectedIds.size >= rosterSize;
                     return (
                       <label
                         key={player.id}
@@ -359,96 +291,6 @@ export default function CreateRoundButton({
                 )}
               </div>
 
-              {/* ── Pair Assignment (visible once 8 players are selected) ── */}
-              {selectedIds.size === 8 && pairs && (
-                <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-purple-900">
-                        Fixed Pairs
-                      </h3>
-                      <p className="text-xs text-purple-700 mt-0.5">
-                        These partnerships are fixed for this round.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSuggestPairs}
-                      disabled={isLoading || isSuggesting}
-                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap"
-                    >
-                      {isSuggesting ? (
-                        <>
-                          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Calculating…
-                        </>
-                      ) : (
-                        <>✨ Suggest Smart Pairs</>
-                      )}
-                    </button>
-                  </div>
-
-                  {swapTarget !== null && (
-                    <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1 mb-2">
-                      Now click another player to swap, or click the same player
-                      to cancel.
-                    </p>
-                  )}
-
-                  <div className="space-y-2">
-                    {pairs.map(([p1Id, p2Id], i) => {
-                      const p1Name = playerById.get(p1Id) ?? "?";
-                      const p2Name = playerById.get(p2Id) ?? "?";
-
-                      const btnClass = (pid: number) => {
-                        const isTarget = swapTarget === pid;
-                        const isPending =
-                          swapTarget !== null && swapTarget !== pid;
-                        return [
-                          "flex-1 py-1.5 px-3 rounded-md text-sm font-medium border transition-colors",
-                          isTarget
-                            ? "bg-blue-100 border-blue-400 text-blue-900 ring-2 ring-blue-300"
-                            : isPending
-                              ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
-                              : "bg-white border-gray-300 text-gray-800 hover:bg-purple-50 hover:border-purple-300 cursor-pointer",
-                        ].join(" ");
-                      };
-
-                      return (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-purple-500 w-8 text-center font-mono font-bold">
-                            P{i + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handlePlayerClick(p1Id)}
-                            className={btnClass(p1Id)}
-                            disabled={isLoading}
-                          >
-                            {p1Name}
-                          </button>
-                          <span className="text-purple-400 font-bold">+</span>
-                          <button
-                            type="button"
-                            onClick={() => handlePlayerClick(p2Id)}
-                            className={btnClass(p2Id)}
-                            disabled={isLoading}
-                          >
-                            {p2Name}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-xs text-purple-600 mt-3">
-                    💡 &quot;Suggest Smart Pairs&quot; hard-avoids partners
-                    already used this season and balances team strength.
-                    Click any two players to swap them manually.
-                  </p>
-                </div>
-              )}
-
               {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
@@ -462,7 +304,7 @@ export default function CreateRoundButton({
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isLoading || selectedIds.size !== 8 || !pairs}
+                  disabled={isLoading || selectedIds.size !== rosterSize}
                 >
                   {isLoading ? "Creating…" : "Create Round"}
                 </button>

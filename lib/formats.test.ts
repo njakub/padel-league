@@ -6,6 +6,7 @@ describe("format registry", () => {
     for (const format of Object.values(FORMATS)) {
       expect(["standard", "americano"]).toContain(format.scoringStyle);
       expect(["pairs", "players"]).toContain(format.roundStandings);
+      expect(["cumulative", "placement"]).toContain(format.seasonScoring);
       expect(format.roundLengths.length).toBeGreaterThan(0);
     }
   });
@@ -68,6 +69,67 @@ describe("format registry", () => {
         ]),
       );
       expect(allPlayerIds).toEqual(new Set([1, 2, 3, 4, 5, 6, 7, 8]));
+    });
+
+    it("throws when pairs are missing", () => {
+      const format = getFormat("americano-pairs");
+      expect(() => format.buildSchedule(6, {})).toThrow(/pairs/);
+    });
+  });
+
+  describe("rotation-5.buildSchedule", () => {
+    const playerIds = [11, 22, 33, 44, 55];
+
+    it("accepts every advertised round length", () => {
+      const format = getFormat("rotation-5");
+      for (const length of format.roundLengths) {
+        const rows = format.buildSchedule(length, { playerIds });
+        expect(rows).toHaveLength(length);
+      }
+    });
+
+    it("rejects a length outside the advertised set", () => {
+      const format = getFormat("rotation-5");
+      expect(() => format.buildSchedule(15, { playerIds })).toThrow();
+    });
+
+    it("throws when playerIds are missing", () => {
+      const format = getFormat("rotation-5");
+      expect(() => format.buildSchedule(5, {})).toThrow(/playerIds/);
+    });
+
+    it("every match has a sit-out and 4 distinct on-court players", () => {
+      const format = getFormat("rotation-5");
+      const rows = format.buildSchedule(5, { playerIds });
+      expect(format.hasSitOut).toBe(true);
+      for (const row of rows) {
+        const onCourt = [
+          row.teamAPlayer1Id,
+          row.teamAPlayer2Id,
+          row.teamBPlayer1Id,
+          row.teamBPlayer2Id,
+        ];
+        expect(row.sitOutPlayerId).toBeDefined();
+        expect(new Set(onCourt).size).toBe(4);
+        expect(onCourt).not.toContain(row.sitOutPlayerId);
+      }
+    });
+
+    it("each player sits out once and partners everyone exactly once", () => {
+      const format = getFormat("rotation-5");
+      const rows = format.buildSchedule(5, { playerIds });
+
+      const sitOuts = rows.map((r) => r.sitOutPlayerId!).sort((a, b) => a - b);
+      expect(sitOuts).toEqual([11, 22, 33, 44, 55]);
+
+      const pairKey = (a: number, b: number) =>
+        a < b ? `${a}-${b}` : `${b}-${a}`;
+      const partnerships = new Set<string>();
+      for (const r of rows) {
+        partnerships.add(pairKey(r.teamAPlayer1Id, r.teamAPlayer2Id));
+        partnerships.add(pairKey(r.teamBPlayer1Id, r.teamBPlayer2Id));
+      }
+      expect(partnerships.size).toBe(10); // all C(5,2) pairs, no repeats
     });
   });
 });

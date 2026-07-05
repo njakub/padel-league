@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { calculateStandings } from "@/lib/scoring";
+import {
+  calculateStandings,
+  calculatePlacementStandings,
+} from "@/lib/scoring";
 import { getFormat } from "@/lib/formats";
 import LeagueCard, { type LeagueCardData } from "@/components/LeagueCard";
 import CreateLeagueButton from "@/components/CreateLeagueButton";
@@ -30,21 +33,38 @@ async function getLeagueCards(): Promise<LeagueCardData[]> {
         ).length
       : 0;
 
-    const completedMatches = league.rounds
-      .filter((r) => r.status === "COMPLETED")
-      .flatMap((r) => r.matches);
-    const topTally = calculateStandings(
-      completedMatches as Parameters<typeof calculateStandings>[0],
-      playerMap,
-      format.scoringStyle,
-    )
-      .filter((s) => s.matchesPlayed > 0)
-      .slice(0, 3)
-      .map((s) => ({
-        playerId: s.playerId,
-        playerName: s.playerName,
-        points: s.points,
-      }));
+    const completedRounds = league.rounds.filter(
+      (r) => r.status === "COMPLETED",
+    );
+    const completedMatches = completedRounds.flatMap((r) => r.matches);
+    const topTally = (
+      format.seasonScoring === "placement"
+        ? calculatePlacementStandings(
+            completedRounds.map(
+              (r) =>
+                r.matches as Parameters<
+                  typeof calculatePlacementStandings
+                >[0][number],
+            ),
+            playerMap,
+            format.scoringStyle,
+          ).map((s) => ({
+            playerId: s.playerId,
+            playerName: s.playerName,
+            points: s.placementPoints,
+          }))
+        : calculateStandings(
+            completedMatches as Parameters<typeof calculateStandings>[0],
+            playerMap,
+            format.scoringStyle,
+          )
+            .filter((s) => s.matchesPlayed > 0)
+            .map((s) => ({
+              playerId: s.playerId,
+              playerName: s.playerName,
+              points: s.points,
+            }))
+    ).slice(0, 3);
 
     return {
       id: league.id,
